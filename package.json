@@ -76,7 +76,6 @@
     "win": {
       "target": "nsis",
       "icon": "build-assets/app-icon.ico",
-      "signAndEditExecutable": false,
       "artifactName": "Central-de-Pagamentos-Setup-${version}.${ext}"
     },
     "nsis": {
