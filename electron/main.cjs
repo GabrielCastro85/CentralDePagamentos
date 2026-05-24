@@ -377,6 +377,9 @@ function registerIpc() {
     'sync:now':    () => syncService.syncNow(),
     'sync:retry':  () => syncService.retryFailed(),
 
+    // Info do app
+    'app:version': () => app.getVersion(),
+
     // Auditoria & Diagnóstico
     'audit:list':           (p) => repositories.listAuditLogs(p),
     'diagnostics:status':   () => getDiagnostics(),

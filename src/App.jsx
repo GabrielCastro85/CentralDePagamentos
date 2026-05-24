@@ -137,6 +137,7 @@ function App() {
   const [diagnostics, setDiagnostics] = useState(null)
   const [auditLogs, setAuditLogs] = useState([])
   const [helpOpen, setHelpOpen] = useState(false)
+  const [appVersion, setAppVersion] = useState('...')
   const [updateState, setUpdateState] = useState(null)
 
   async function loadAll(filters = historicalFilters) {
@@ -213,6 +214,7 @@ function App() {
     loadLastBackup()
     loadSyncStatus()
     api.invoke('config:get').then(setConfigState).catch(() => {})
+    api.invoke('app:version').then(setAppVersion).catch(() => {})
     const timer = setInterval(loadSyncStatus, 30_000)
     // Escuta eventos push do auto-updater (electron-updater)
     const cleanupUpdater = window.centralApi?.onUpdaterEvent?.((event) => setUpdateState(event))
@@ -387,7 +389,7 @@ function App() {
 
         <footer className="app-footer">
           <span>Central de Pagamentos</span>
-          <span>Versão 1.0.0</span>
+          <span>Versão {appVersion}</span>
           <span>Todos os direitos reservados</span>
         </footer>
       </main>
