@@ -1017,39 +1017,50 @@ function createRepositories(db) {
     }
   }
 
+  // node:sqlite rejeita params extras não presentes na SQL. Esta função filtra o objeto
+  // mantendo apenas as chaves que aparecem como @chave na query.
+  function sqlParams(sql, obj) {
+    const used = new Set((sql.match(/@(\w+)/g) || []).map((p) => p.slice(1)));
+    return Object.fromEntries(Object.entries(obj).filter(([k]) => used.has(k)));
+  }
+
   function upsertRemoteEmpresa(row, current) {
     const payload = { ...row, syncStatus: 'SYNCED', lastSyncedAt: nowIso() };
     if (current) {
-      db.prepare(`
+      const sql = `
         UPDATE empresas SET apelido=@apelido, razaoSocial=@razaoSocial, cnpj=@cnpj, banco=@banco,
           agencia=@agencia, conta=@conta, ativo=@ativo, createdAt=@createdAt, updatedAt=@updatedAt,
           deletedAt=@deletedAt, syncStatus=@syncStatus, lastSyncedAt=@lastSyncedAt, deviceId=@deviceId
         WHERE id=@id
-      `).run({ ...payload, id: current.id });
+      `;
+      db.prepare(sql).run(sqlParams(sql, { ...payload, id: current.id }));
       return { applied: true, id: current.id };
     }
-    const result = db.prepare(`
+    const sql = `
       INSERT INTO empresas (apelido, razaoSocial, cnpj, banco, agencia, conta, ativo, createdAt, updatedAt, uuid, deletedAt, syncStatus, lastSyncedAt, deviceId)
       VALUES (@apelido, @razaoSocial, @cnpj, @banco, @agencia, @conta, @ativo, @createdAt, @updatedAt, @uuid, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId)
-    `).run(payload);
+    `;
+    const result = db.prepare(sql).run(sqlParams(sql, payload));
     return { applied: true, id: result.lastInsertRowid };
   }
 
   function upsertRemoteCliente(row, current) {
     const payload = { ...row, syncStatus: 'SYNCED', lastSyncedAt: nowIso() };
     if (current) {
-      db.prepare(`
+      const sql = `
         UPDATE clientes SET nomeCurto=@nomeCurto, razaoSocial=@razaoSocial, grupoWhatsapp=@grupoWhatsapp,
           observacoes=@observacoes, ativo=@ativo, createdAt=@createdAt, updatedAt=@updatedAt,
           deletedAt=@deletedAt, syncStatus=@syncStatus, lastSyncedAt=@lastSyncedAt, deviceId=@deviceId
         WHERE id=@id
-      `).run({ ...payload, id: current.id });
+      `;
+      db.prepare(sql).run(sqlParams(sql, { ...payload, id: current.id }));
       return { applied: true, id: current.id };
     }
-    const result = db.prepare(`
+    const sql = `
       INSERT INTO clientes (nomeCurto, razaoSocial, grupoWhatsapp, observacoes, ativo, createdAt, updatedAt, uuid, deletedAt, syncStatus, lastSyncedAt, deviceId)
       VALUES (@nomeCurto, @razaoSocial, @grupoWhatsapp, @observacoes, @ativo, @createdAt, @updatedAt, @uuid, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId)
-    `).run(payload);
+    `;
+    const result = db.prepare(sql).run(sqlParams(sql, payload));
     return { applied: true, id: result.lastInsertRowid };
   }
 
@@ -1059,18 +1070,20 @@ function createRepositories(db) {
     if (!cliente || !empresa) return { applied: false, reason: 'missing_relation' };
     const payload = { ...row, clienteId: cliente.id, empresaId: empresa.id, syncStatus: 'SYNCED', lastSyncedAt: nowIso() };
     if (current) {
-      db.prepare(`
+      const sql = `
         UPDATE operacoes SET codigo=@codigo, data=@data, clienteId=@clienteId, empresaId=@empresaId,
           valorRecebido=@valorRecebido, status=@status, observacao=@observacao, createdAt=@createdAt,
           updatedAt=@updatedAt, deletedAt=@deletedAt, syncStatus=@syncStatus, lastSyncedAt=@lastSyncedAt, deviceId=@deviceId
         WHERE id=@id
-      `).run({ ...payload, id: current.id });
+      `;
+      db.prepare(sql).run(sqlParams(sql, { ...payload, id: current.id }));
       return { applied: true, id: current.id };
     }
-    const result = db.prepare(`
+    const sql = `
       INSERT INTO operacoes (codigo, data, clienteId, empresaId, valorRecebido, status, observacao, createdAt, updatedAt, uuid, deletedAt, syncStatus, lastSyncedAt, deviceId)
       VALUES (@codigo, @data, @clienteId, @empresaId, @valorRecebido, @status, @observacao, @createdAt, @updatedAt, @uuid, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId)
-    `).run(payload);
+    `;
+    const result = db.prepare(sql).run(sqlParams(sql, payload));
     return { applied: true, id: result.lastInsertRowid };
   }
 
@@ -1079,18 +1092,19 @@ function createRepositories(db) {
     if (!operacao) return { applied: false, reason: 'missing_relation' };
     const payload = { ...row, operacaoId: operacao.id, syncStatus: 'SYNCED', lastSyncedAt: nowIso() };
     if (current) {
-      db.prepare(`
+      const sql = `
         UPDATE pagamentos SET operacaoId=@operacaoId, data=@data, favorecido=@favorecido, documento=@documento,
           tipoPagamento=@tipoPagamento, chavePix=@chavePix, banco=@banco, agencia=@agencia, tipoConta=@tipoConta,
           conta=@conta, digito=@digito, valor=@valor, pago=@pago, comprovanteEnviado=@comprovanteEnviado,
           observacao=@observacao, createdAt=@createdAt, updatedAt=@updatedAt, deletedAt=@deletedAt,
           syncStatus=@syncStatus, lastSyncedAt=@lastSyncedAt, deviceId=@deviceId
         WHERE id=@id
-      `).run({ ...payload, id: current.id });
+      `;
+      db.prepare(sql).run(sqlParams(sql, { ...payload, id: current.id }));
       syncOperacaoStatus(payload.operacaoId, { enqueue: false, syncStatus: 'SYNCED' });
       return { applied: true, id: current.id };
     }
-    const result = db.prepare(`
+    const sql = `
       INSERT INTO pagamentos (
         operacaoId, data, favorecido, documento, tipoPagamento, chavePix, banco, agencia, tipoConta, conta, digito,
         valor, pago, comprovanteEnviado, observacao, createdAt, updatedAt, uuid, deletedAt, syncStatus, lastSyncedAt, deviceId
@@ -1099,7 +1113,8 @@ function createRepositories(db) {
         @operacaoId, @data, @favorecido, @documento, @tipoPagamento, @chavePix, @banco, @agencia, @tipoConta, @conta, @digito,
         @valor, @pago, @comprovanteEnviado, @observacao, @createdAt, @updatedAt, @uuid, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId
       )
-    `).run(payload);
+    `;
+    const result = db.prepare(sql).run(sqlParams(sql, payload));
     syncOperacaoStatus(payload.operacaoId, { enqueue: false, syncStatus: 'SYNCED' });
     return { applied: true, id: result.lastInsertRowid };
   }
@@ -1107,18 +1122,20 @@ function createRepositories(db) {
   function upsertRemoteAuditLog(row, current) {
     const payload = { ...row, syncStatus: 'SYNCED', lastSyncedAt: nowIso() };
     if (current) {
-      db.prepare(`
+      const sql = `
         UPDATE audit_logs SET action=@action, entity=@entity, entityId=@entityId, details=@details,
           createdAt=@createdAt, updatedAt=@updatedAt, deletedAt=@deletedAt, syncStatus=@syncStatus,
           lastSyncedAt=@lastSyncedAt, deviceId=@deviceId
         WHERE id=@id
-      `).run({ ...payload, id: current.id });
+      `;
+      db.prepare(sql).run(sqlParams(sql, { ...payload, id: current.id }));
       return { applied: true, id: current.id };
     }
-    const result = db.prepare(`
+    const sql = `
       INSERT INTO audit_logs (uuid, action, entity, entityId, details, createdAt, updatedAt, deletedAt, syncStatus, lastSyncedAt, deviceId)
       VALUES (@uuid, @action, @entity, @entityId, @details, @createdAt, @updatedAt, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId)
-    `).run(payload);
+    `;
+    const result = db.prepare(sql).run(sqlParams(sql, payload));
     return { applied: true, id: result.lastInsertRowid };
   }
 
