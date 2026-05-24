@@ -1,0 +1,23 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Símbolo CP Central de Pagamentos</title>
+  <desc id="desc">Monograma CP em gradiente teal e cyan.</desc>
+  <defs>
+    <linearGradient id="cpGradient" x1="34" y1="26" x2="128" y2="136" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14E0C9"/>
+      <stop offset="0.52" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <filter id="softGlow" x="8" y="6" width="144" height="148" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feGaussianBlur in="SourceAlpha" stdDeviation="7" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.078 0 0 0 0 0.878 0 0 0 0 0.788 0 0 0 0.34 0"/>
+      <feBlend in2="BackgroundImageFix" result="glow"/>
+      <feBlend in="SourceGraphic" in2="glow" result="shape"/>
+    </filter>
+  </defs>
+  <g filter="url(#softGlow)">
+    <path d="M77 32H52C37.1 32 25 44.1 25 59v19c0 14.9 12.1 27 27 27h18V87H52c-5 0-9-4-9-9V59c0-5 4-9 9-9h33L91 32H77Z" fill="url(#cpGradient)"/>
+    <path d="M63 65h47c14.4 0 26 11.6 26 26s-11.6 26-26 26H81v25L63 154V99h47c4.4 0 8-3.6 8-8s-3.6-8-8-8H63V65Z" fill="url(#cpGradient)"/>
+    <path d="M89 32h39l-6.3 18H83.2L89 32Z" fill="#55F4E5" fill-opacity="0.88"/>
+  </g>
+</svg>

@@ -1,0 +1,23 @@
+<svg width="760" height="320" viewBox="0 0 760 320" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Splash Central de Pagamentos</title>
+  <desc id="desc">Logo para tela de carregamento com fundo dark premium.</desc>
+  <defs>
+    <radialGradient id="halo" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(244 154) rotate(90) scale(164 246)">
+      <stop stop-color="#14E0C9" stop-opacity="0.22"/>
+      <stop offset="1" stop-color="#07111F" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="cpGradient" x1="112" y1="82" x2="252" y2="250" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14E0C9"/>
+      <stop offset="0.55" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+  </defs>
+  <rect width="760" height="320" rx="28" fill="#07111F"/>
+  <rect width="760" height="320" rx="28" fill="url(#halo)"/>
+  <path d="M186 82h-52c-32 0-58 26-58 58v39c0 32 26 58 58 58h37v-39h-37c-10 0-19-9-19-19v-39c0-10 9-19 19-19h69l13-39h-30Z" fill="url(#cpGradient)"/>
+  <path d="M156 153h99c31 0 56 25 56 56s-25 56-56 56h-61v52l-38 27V226h99c9 0 17-8 17-17s-8-17-17-17h-99v-39Z" fill="url(#cpGradient)"/>
+  <path d="M212 82h83l-13 39h-83l13-39Z" fill="#55F4E5" fill-opacity="0.9"/>
+  <text x="348" y="143" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="28" font-weight="500" letter-spacing="7">CENTRAL DE</text>
+  <text x="348" y="190" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="41" font-weight="850">PAGAMENTOS</text>
+  <text x="350" y="222" fill="#14E0C9" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">GESTÃO FINANCEIRA • CONTROLE • CONFIANÇA</text>
+</svg>

@@ -1,0 +1,23 @@
+<svg width="620" height="176" viewBox="0 0 620 176" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Central de Pagamentos</title>
+  <desc id="desc">Logo horizontal com símbolo CP e texto Central de Pagamentos.</desc>
+  <defs>
+    <linearGradient id="cpGradient" x1="24" y1="28" x2="126" y2="150" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#14E0C9"/>
+      <stop offset="0.55" stop-color="#14B8A6"/>
+      <stop offset="1" stop-color="#0EA5E9"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="160" height="176" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#0EA5E9" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect width="620" height="176" rx="28" fill="#07111F"/>
+  <g filter="url(#shadow)">
+    <path d="M76 39H52C37.1 39 25 51.1 25 66v18c0 14.9 12.1 27 27 27h17V93H52c-5 0-9-4-9-9V66c0-5 4-9 9-9h32l6-18H76Z" fill="url(#cpGradient)"/>
+    <path d="M62 71h45c14.4 0 26 11.6 26 26s-11.6 26-26 26H80v24l-18 13V105h45c4.4 0 8-3.6 8-8s-3.6-8-8-8H62V71Z" fill="url(#cpGradient)"/>
+    <path d="M88 39h38l-6.2 18H82.2L88 39Z" fill="#55F4E5" fill-opacity="0.88"/>
+  </g>
+  <text x="166" y="74" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="30" font-weight="500" letter-spacing="8">CENTRAL DE</text>
+  <text x="166" y="121" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="42" font-weight="850" letter-spacing="1">PAGAMENTOS</text>
+  <text x="168" y="149" fill="#14E0C9" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="13" font-weight="700" letter-spacing="2">GESTÃO FINANCEIRA • CONTROLE • CONFIANÇA</text>
+</svg>

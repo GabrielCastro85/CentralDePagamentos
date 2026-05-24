@@ -1,0 +1,94 @@
+{
+  "name": "central-de-pagamentos",
+  "private": true,
+  "version": "1.0.0",
+  "description": "App desktop Windows para controle operacional de pagamentos.",
+  "author": "Central de Pagamentos",
+  "main": "electron/main.cjs",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:vite\" \"npm:dev:electron\"",
+    "dev:vite": "vite --host 127.0.0.1",
+    "dev:electron": "wait-on tcp:127.0.0.1:5173 && cross-env ELECTRON_START_URL=http://127.0.0.1:5173 electron .",
+    "build": "vite build",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "clean": "node -e \"const fs=require('fs'); for (const p of ['build','dist']) fs.rmSync(p,{recursive:true,force:true});\"",
+    "icon:win": "node scripts/generate-windows-icon.mjs",
+    "dist": "npm run clean && npm run icon:win && npm run build && electron-builder --win nsis --publish never",
+    "dist:local": "npm run clean && npm run icon:win && npm run build && electron-builder --win nsis --publish never --config.directories.output=C:\\Temp\\central-build",
+    "pack": "npm run clean && npm run icon:win && npm run build && electron-builder --dir --publish never",
+    "release": "npm run clean && npm run icon:win && npm run build && electron-builder --win nsis --publish always --config.directories.output=C:\\Temp\\central-release"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3",
+    "lucide-react": "^1.16.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "better-sqlite3": "^11.9.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^38.4.0",
+    "electron-builder": "^26.0.12",
+    "eslint": "^10.3.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.6.0",
+    "jsdom": "^29.1.1",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
+    "vite": "^8.0.12",
+    "vitest": "^4.1.7",
+    "wait-on": "^9.0.10"
+  },
+  "build": {
+    "appId": "com.centralpagamentos.app",
+    "productName": "Central de Pagamentos",
+    "npmRebuild": false,
+    "publish": {
+      "provider": "github",
+      "owner": "GabrielCastro85",
+      "repo": "CentralDePagamentos",
+      "releaseType": "release"
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "build/renderer/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      { "from": "build-assets/app-icon.ico", "to": "app-icon.ico" },
+      { "from": "build-assets/app-icon.png", "to": "app-icon.png" },
+      { "from": "src/assets/brand/app-icon.svg", "to": "app-icon.svg" }
+    ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build-assets/app-icon.ico",
+      "signAndEditExecutable": false,
+      "artifactName": "Central-de-Pagamentos-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "installerIcon": "build-assets/app-icon.ico",
+      "uninstallerIcon": "build-assets/app-icon.ico",
+      "installerHeaderIcon": "build-assets/app-icon.ico",
+      "shortcutName": "Central de Pagamentos",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
