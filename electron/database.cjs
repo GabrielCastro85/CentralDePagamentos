@@ -194,6 +194,13 @@ function runMigrations(db) {
     })();
   }
 
+  if (!applied.includes('006_cliente_destaque')) {
+    db.transaction(() => {
+      addColumnIfMissing(db, 'clientes', 'destaque', 'INTEGER NOT NULL DEFAULT 0');
+      db.prepare('INSERT INTO migrations (id, name, appliedAt) VALUES (?, ?, ?)').run(6, '006_cliente_destaque', nowIso());
+    })();
+  }
+
   if (!applied.includes('003_offline_sync')) {
     db.transaction(() => {
       for (const table of ['empresas', 'clientes', 'operacoes', 'pagamentos']) {

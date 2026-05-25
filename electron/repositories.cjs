@@ -284,7 +284,7 @@ function createRepositories(db) {
     const clauses = ['deletedAt IS NULL'];
     if (activeOnly) clauses.push('ativo = 1');
     const sql = `SELECT * FROM clientes WHERE ${clauses.join(' AND ')} ORDER BY nomeCurto`;
-    return db.prepare(sql).all().map((row) => toBool(row, ['ativo']));
+    return db.prepare(sql).all().map((row) => toBool(row, ['ativo', 'destaque']));
   }
 
   function saveCliente(input) {
@@ -295,6 +295,7 @@ function createRepositories(db) {
       grupoWhatsapp: input.grupoWhatsapp?.trim() || '',
       observacoes: input.observacoes?.trim() || '',
       ativo: boolToInt(input.ativo !== false),
+      destaque: boolToInt(input.destaque || false),
       updatedAt: nowIso(),
       ...syncDefaults(input),
     };
@@ -303,7 +304,7 @@ function createRepositories(db) {
       db.prepare(`
         UPDATE clientes
         SET nomeCurto=@nomeCurto, razaoSocial=@razaoSocial, grupoWhatsapp=@grupoWhatsapp,
-            observacoes=@observacoes, ativo=@ativo, updatedAt=@updatedAt,
+            observacoes=@observacoes, ativo=@ativo, destaque=@destaque, updatedAt=@updatedAt,
             uuid=COALESCE(uuid, @uuid), syncStatus=@syncStatus, lastSyncedAt=@lastSyncedAt,
             deviceId=@deviceId, deletedAt=@deletedAt
         WHERE id=@id
@@ -311,24 +312,24 @@ function createRepositories(db) {
       const saved = getRaw('clientes', input.id);
       enqueueSync('clientes', input.id, 'UPDATE', saved);
       logAudit('UPDATE', 'clientes', input.id, { uuid: saved.uuid });
-      return toBool(saved, ['ativo']);
+      return toBool(saved, ['ativo', 'destaque']);
     }
 
     const createdAt = nowIso();
     const result = db.prepare(`
       INSERT INTO clientes (
-        nomeCurto, razaoSocial, grupoWhatsapp, observacoes, ativo, createdAt, updatedAt,
+        nomeCurto, razaoSocial, grupoWhatsapp, observacoes, ativo, destaque, createdAt, updatedAt,
         uuid, deletedAt, syncStatus, lastSyncedAt, deviceId
       )
       VALUES (
-        @nomeCurto, @razaoSocial, @grupoWhatsapp, @observacoes, @ativo, @createdAt, @updatedAt,
+        @nomeCurto, @razaoSocial, @grupoWhatsapp, @observacoes, @ativo, @destaque, @createdAt, @updatedAt,
         @uuid, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId
       )
     `).run({ ...payload, createdAt });
     const saved = getRaw('clientes', result.lastInsertRowid);
     enqueueSync('clientes', result.lastInsertRowid, 'CREATE', saved);
     logAudit('CREATE', 'clientes', result.lastInsertRowid, { uuid: saved.uuid });
-    return toBool(saved, ['ativo']);
+    return toBool(saved, ['ativo', 'destaque']);
   }
 
   function getCliente(id) {
@@ -473,9 +474,9 @@ function createRepositories(db) {
       SELECT
         o.*,
         c.nomeCurto AS clienteNome,
+        c.destaque AS clienteDestaque,
         e.apelido AS empresaApelido,
         e.cnpj AS empresaCnpj,
-        e.destaque AS empresaDestaque,
         COALESCE(SUM(CASE WHEN p.pago = 1 THEN p.valor ELSE 0 END), 0) AS totalPago,
         COALESCE(SUM(CASE WHEN p.pago = 0 THEN 1 ELSE 0 END), 0) AS pagamentosPendentes,
         COALESCE(SUM(CASE WHEN p.pago = 1 AND p.comprovanteEnviado = 0 THEN 1 ELSE 0 END), 0) AS comprovantesPendentes,
@@ -499,7 +500,7 @@ function createRepositories(db) {
       totalPago,
       saldo,
       alertaSaldoNegativo: saldo < 0,
-      empresaDestaque: Boolean(row.empresaDestaque),
+      clienteDestaque: Boolean(row.clienteDestaque),
       pagamentosPendentes: Number(row.pagamentosPendentes || 0),
       comprovantesPendentes: Number(row.comprovantesPendentes || 0),
       quantidadePagamentos: Number(row.quantidadePagamentos || 0),
