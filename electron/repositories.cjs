@@ -160,7 +160,7 @@ function createRepositories(db) {
     `).run(entity, entityId, action, JSON.stringify(payload), nowIso());
   }
 
-  function logAudit(action, entity, entityId, details = {}) {
+  function logAudit(action, entity, entityId, details = {}, { skipQueue = false } = {}) {
     if (suppressSyncQueue) return;
     const timestamp = nowIso();
     const payload = {
@@ -172,15 +172,17 @@ function createRepositories(db) {
       createdAt: timestamp,
       updatedAt: timestamp,
       deletedAt: null,
-      syncStatus: 'PENDING',
-      lastSyncedAt: null,
+      syncStatus: skipQueue ? 'SYNCED' : 'PENDING',
+      lastSyncedAt: skipQueue ? timestamp : null,
       deviceId: getDeviceId(),
     };
     const result = db.prepare(`
       INSERT INTO audit_logs (uuid, action, entity, entityId, details, createdAt, updatedAt, deletedAt, syncStatus, lastSyncedAt, deviceId)
       VALUES (@uuid, @action, @entity, @entityId, @details, @createdAt, @updatedAt, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId)
     `).run(payload);
-    enqueueSync('audit_logs', result.lastInsertRowid, 'CREATE', { ...payload, id: result.lastInsertRowid });
+    if (!skipQueue) {
+      enqueueSync('audit_logs', result.lastInsertRowid, 'CREATE', { ...payload, id: result.lastInsertRowid });
+    }
   }
 
   function listAuditLogs({ limit = 100, query = '' } = {}) {

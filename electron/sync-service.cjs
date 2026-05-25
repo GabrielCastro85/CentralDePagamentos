@@ -77,18 +77,18 @@ class SyncService {
     this.running = true;
     this.lastState = 'syncing';
     this.lastError = '';
-    this.repositories.logAudit?.('SYNC_START', 'sync', null, { source: 'sync' });
+    this.repositories.logAudit?.('SYNC_START', 'sync', null, { source: 'sync' }, { skipQueue: true });
     try {
       await this.registerDevice();
       const pushed = await this.pushQueue();
       const pulled = await this.pullRemoteChanges();
       this.lastState = 'online';
-      this.repositories.logAudit?.('SYNC_SUCCESS', 'sync', null, { source: 'sync', pushed, pulled });
+      this.repositories.logAudit?.('SYNC_SUCCESS', 'sync', null, { source: 'sync', pushed, pulled }, { skipQueue: true });
       return { ...this.getStatus(), pushed, pulled };
     } catch (error) {
       this.lastState = 'error';
       this.lastError = error.message;
-      this.repositories.logAudit?.('SYNC_ERROR', 'sync', null, { source: 'sync', message: error.message });
+      this.repositories.logAudit?.('SYNC_ERROR', 'sync', null, { source: 'sync', message: error.message }, { skipQueue: true });
       return { ...this.getStatus(), error: error.message };
     } finally {
       this.running = false;
