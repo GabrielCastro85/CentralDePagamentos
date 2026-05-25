@@ -24,6 +24,7 @@ import {
   ListChecks,
   LayoutDashboard,
   Paperclip,
+  Receipt,
   Pencil,
   Plus,
   RefreshCw,
@@ -62,6 +63,7 @@ const tabs = [
   ['operacional', LayoutDashboard, 'Operacional'],
   ['historico', History, 'Histórico'],
   ['operacoes', WalletCards, 'Operações'],
+  ['contas', Receipt, 'Contas a Pagar'],
   ['empresas', Building2, 'Empresas / Contas'],
   ['clientes', Users, 'Clientes'],
   ['backup', DatabaseBackup, 'Backup'],
@@ -114,6 +116,14 @@ const emptyPagamento = {
   observacao: '',
 }
 
+const emptyContaForm = {
+  descricao: '',
+  valor: '',
+  vencimento: '',
+  categoria: '',
+  observacao: '',
+}
+
 function App() {
   const [activeTab, setActiveTab] = useState('operacional')
   const [state, setState] = useState({
@@ -139,6 +149,16 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [appVersion, setAppVersion] = useState('...')
   const [updateState, setUpdateState] = useState(null)
+  const [contas, setContas] = useState([])
+
+  async function loadContas() {
+    try {
+      const data = await api.invoke('contas:list', { incluirPagas: true })
+      setContas(data)
+    } catch (err) {
+      setError(err.message)
+    }
+  }
 
   async function loadAll(filters = historicalFilters) {
     setLoading(true)
@@ -247,6 +267,7 @@ function App() {
 
   useEffect(() => {
     if (activeTab === 'diagnostico') loadDiagnostics()
+    if (activeTab === 'contas') loadContas()
   }, [activeTab])
 
   const selectedOperation = useMemo(
@@ -360,6 +381,7 @@ function App() {
         )}
         {activeTab === 'empresas' && <EmpresasPage empresas={state.empresas} runAction={runAction} requestConfirm={requestConfirm} />}
         {activeTab === 'clientes' && <ClientesPage clientes={state.clientes} runAction={runAction} requestConfirm={requestConfirm} />}
+        {activeTab === 'contas' && <ContasPage contas={contas} onRefresh={loadContas} runAction={runAction} requestConfirm={requestConfirm} />}
         {activeTab === 'operacoes' && (
           <OperacoesPage
             empresas={state.empresas}
@@ -1144,6 +1166,211 @@ function accountPreview(payment) {
 }
 
 
+function ContasPage({ contas, onRefresh, runAction, requestConfirm }) {
+  const [form, setForm] = useState(emptyContaForm)
+  const [showModal, setShowModal] = useState(false)
+  const [filterPago, setFilterPago] = useState('pendentes')
+  const [search, setSearch] = useState('')
+  const editing = Boolean(form.id)
+
+  const todayStr = new Date().toISOString().slice(0, 10)
+
+  const filtered = contas.filter((c) => {
+    if (filterPago === 'pendentes' && c.pago) return false
+    if (filterPago === 'pagas' && !c.pago) return false
+    if (search) {
+      const q = search.toLowerCase()
+      if (!c.descricao?.toLowerCase().includes(q) && !c.categoria?.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  const totalPendente = contas.filter((c) => !c.pago).reduce((s, c) => s + Number(c.valor || 0), 0)
+  const totalPago     = contas.filter((c) =>  c.pago).reduce((s, c) => s + Number(c.valor || 0), 0)
+  const vencendoHoje  = contas.filter((c) => !c.pago && c.vencimento === todayStr).length
+
+  function openAdd() {
+    setForm({ ...emptyContaForm })
+    setShowModal(true)
+  }
+
+  function openEdit(conta) {
+    setForm({ ...conta })
+    setShowModal(true)
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    await runAction(async () => {
+      await api.invoke('contas:save', form)
+      setShowModal(false)
+      setForm(emptyContaForm)
+      await onRefresh()
+    }, editing ? 'Conta atualizada.' : 'Conta criada.')
+  }
+
+  async function handlePagar(conta) {
+    await runAction(async () => {
+      await api.invoke('contas:pagar', { id: conta.id, pago: !conta.pago })
+      await onRefresh()
+    }, conta.pago ? 'Conta desmarcada como paga.' : 'Conta marcada como paga.')
+  }
+
+  async function handleComprovante(conta) {
+    try {
+      const result = await api.invoke('contas:comprovante:salvar', { id: conta.id })
+      if (!result?.canceled) await onRefresh()
+    } catch { /* usuário cancelou */ }
+  }
+
+  async function handleAbrirComprovante(conta) {
+    await api.invoke('contas:comprovante:abrir', { path: conta.comprovantePath })
+  }
+
+  return (
+    <section className="stack">
+      <div className="card-grid three">
+        <Metric icon={Receipt}       tone="yellow" title="Contas pendentes" value={brl(totalPendente)} subtext={`${contas.filter((c) => !c.pago).length} conta(s)`} />
+        <Metric icon={CheckCircle2}  tone="green"  title="Contas pagas"     value={brl(totalPago)}     subtext={`${contas.filter((c) =>  c.pago).length} conta(s)`} />
+        <Metric icon={AlertTriangle} tone={vencendoHoje > 0 ? 'yellow' : 'neutral'} title="Vencem hoje" value={vencendoHoje} subtext={vencendoHoje > 0 ? 'Atenção!' : 'Nenhuma hoje'} />
+      </div>
+
+      <Panel
+        title="Contas a Pagar"
+        action={
+          <div className="table-toolbar">
+            <button className="primary" onClick={openAdd}><Plus size={16} />Nova conta</button>
+            <select
+              className="compact-input"
+              value={filterPago}
+              onChange={(e) => setFilterPago(e.target.value)}
+              style={{ padding: '0 8px', height: 34, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+            >
+              <option value="todas">Todas</option>
+              <option value="pendentes">Pendentes</option>
+              <option value="pagas">Pagas</option>
+            </select>
+            <label className="search-box">
+              <Search size={16} />
+              <input placeholder="Buscar conta..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            </label>
+          </div>
+        }
+      >
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Categoria</th>
+                <th className="money">Valor</th>
+                <th>Vencimento</th>
+                <th>Status</th>
+                <th>Pago em</th>
+                <th>Comprovante</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 && (
+                <tr><td colSpan="8"><EmptyState title="Nenhuma conta encontrada" text="Adicione contas para controlar seus vencimentos e pagamentos." /></td></tr>
+              )}
+              {filtered.map((conta) => {
+                const isVencida = !conta.pago && conta.vencimento && conta.vencimento < todayStr
+                const isHoje    = !conta.pago && conta.vencimento === todayStr
+                return (
+                  <tr key={conta.id} className={isVencida ? 'row-needs-review' : ''}>
+                    <td>
+                      {conta.descricao}
+                      {isVencida && <AlertTriangle size={13} title="Vencida"    style={{ color: 'var(--danger)', marginLeft: 6, verticalAlign: 'middle' }} />}
+                      {isHoje    && <AlertTriangle size={13} title="Vence hoje" style={{ color: 'var(--yellow)', marginLeft: 6, verticalAlign: 'middle' }} />}
+                    </td>
+                    <td>{conta.categoria || '—'}</td>
+                    <td className="money teal-text">{brl(conta.valor)}</td>
+                    <td>{formatDate(conta.vencimento)}</td>
+                    <td>
+                      <StatusBadge
+                        label={conta.pago ? 'Pago' : isVencida ? 'Vencida' : 'Pendente'}
+                        tone={conta.pago ? 'ok' : isVencida ? 'danger' : 'warn'}
+                      />
+                    </td>
+                    <td>{conta.pagoEm ? formatDate(conta.pagoEm) : '—'}</td>
+                    <td>
+                      {conta.comprovantePath
+                        ? <button className="icon-button" title="Abrir comprovante" onClick={() => handleAbrirComprovante(conta)}><Paperclip size={15} /></button>
+                        : <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      }
+                    </td>
+                    <td className="table-actions">
+                      <button className="icon-button" title="Editar" onClick={() => openEdit(conta)}><Pencil size={16} /></button>
+                      <button
+                        className={`icon-button ${conta.pago ? '' : 'success'}`}
+                        title={conta.pago ? 'Desmarcar pago' : 'Marcar como pago'}
+                        onClick={() => handlePagar(conta)}
+                      >
+                        {conta.pago ? <RotateCcw size={15} /> : <Check size={15} />}
+                      </button>
+                      <button className="icon-button" title="Anexar comprovante" onClick={() => handleComprovante(conta)}>
+                        <Paperclip size={15} />
+                      </button>
+                      <button className="icon-button danger" title="Excluir" onClick={() => requestConfirm({
+                        tone: 'danger',
+                        title: `Excluir "${conta.descricao}"?`,
+                        text: 'Esta ação não pode ser desfeita.',
+                        confirmLabel: 'Excluir conta',
+                        onConfirm: () => runAction(async () => { await api.invoke('contas:delete', { id: conta.id }); await onRefresh() }, 'Conta excluída.'),
+                      })}><Trash2 size={15} /></button>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
+      {showModal && (
+        <ContaModal
+          form={form}
+          onChange={setForm}
+          onClose={() => { setShowModal(false); setForm(emptyContaForm) }}
+          onSave={submit}
+        />
+      )}
+    </section>
+  )
+}
+
+function ContaModal({ form, onChange, onClose, onSave }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <section className="modal-card">
+        <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
+        <div className="modal-heading">
+          <span className="modal-icon"><Receipt size={24} /></span>
+          <div>
+            <h2>{form.id ? 'Editar conta' : 'Nova conta a pagar'}</h2>
+            <p>Registre a despesa com vencimento e acompanhe o pagamento.</p>
+          </div>
+        </div>
+        <form onSubmit={onSave} className="stack">
+          <div className="form-grid two">
+            <Input label="Descrição" value={form.descricao} onChange={(descricao) => onChange({ ...form, descricao })} required />
+            <CurrencyInput label="Valor" value={form.valor} onChange={(valor) => onChange({ ...form, valor })} />
+            <Input label="Vencimento" type="date" value={form.vencimento || ''} onChange={(vencimento) => onChange({ ...form, vencimento })} />
+            <Input label="Categoria" value={form.categoria || ''} onChange={(categoria) => onChange({ ...form, categoria })} placeholder="Ex: Aluguel, Energia, Água..." />
+          </div>
+          <Input label="Observação" value={form.observacao || ''} onChange={(observacao) => onChange({ ...form, observacao })} />
+          <div className="modal-actions">
+            <button type="button" className="ghost" onClick={onClose}>Cancelar</button>
+            <button className="primary" type="submit"><Save size={16} />{form.id ? 'Salvar conta' : 'Criar conta'}</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  )
+}
+
 function BackupPage({ runAction, requestConfirm }) {
   const [backups, setBackups] = useState([])
 
@@ -1786,6 +2013,7 @@ function pageTitle(page) {
     operacional: 'Operacional',
     historico: 'Histórico',
     operacoes: 'Operações',
+    contas: 'Contas a Pagar',
     empresas: 'Empresas / Contas',
     clientes: 'Clientes',
     backup: 'Backup e Exportações',
@@ -1801,6 +2029,7 @@ function pageSubtitle(page) {
     operacional: 'Acompanhe suas operações em tempo real',
     historico: 'Analise operações concluídas e movimentações históricas.',
     operacoes: 'Gerencie entradas financeiras e acompanhe o status das operações.',
+    contas: 'Gerencie despesas, boletos e contas fixas com alerta de vencimento.',
     empresas: 'Gerencie contas bancárias e CNPJs utilizados nas operações.',
     clientes: 'Cadastre e gerencie clientes atendidos.',
     backup: 'Proteja seus dados e exporte relatórios operacionais.',

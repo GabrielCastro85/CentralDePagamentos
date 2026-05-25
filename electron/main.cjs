@@ -1,5 +1,6 @@
 const fs = require('node:fs');
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Notification } = require('electron');
+const { randomUUID } = require('node:crypto');
 const path = require('node:path');
 const { createRepositories } = require('./repositories.cjs');
 const { getDefaultDbPath, openDatabase } = require('./database.cjs');
@@ -377,6 +378,33 @@ function registerIpc() {
     'sync:now':    () => syncService.syncNow(),
     'sync:retry':  () => syncService.retryFailed(),
 
+    // Contas a Pagar
+    'contas:list':   (p) => repositories.listContas(p),
+    'contas:save':   (p) => repositories.saveConta(p),
+    'contas:delete': (p) => repositories.deleteConta(p.id),
+    'contas:pagar':  (p) => repositories.pagarConta(p.id, p.pago),
+    'contas:comprovante:salvar': async (p) => {
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: 'Selecionar comprovante',
+        properties: ['openFile'],
+        filters: [{ name: 'Imagens e PDFs', extensions: ['jpg', 'jpeg', 'png', 'pdf', 'webp', 'gif'] }],
+      });
+      if (result.canceled || !result.filePaths[0]) return { canceled: true };
+      const srcPath = result.filePaths[0];
+      const comprovantesDir = path.join(app.getPath('userData'), 'comprovantes');
+      if (!fs.existsSync(comprovantesDir)) fs.mkdirSync(comprovantesDir, { recursive: true });
+      const ext = path.extname(srcPath);
+      const destPath = path.join(comprovantesDir, `${randomUUID()}${ext}`);
+      fs.copyFileSync(srcPath, destPath);
+      repositories.salvarComprovanteConta(p.id, destPath);
+      return { canceled: false, filePath: destPath };
+    },
+    'contas:comprovante:abrir': async (p) => {
+      if (!p.path || !fs.existsSync(p.path)) return { ok: false, message: 'Arquivo não encontrado.' };
+      await shell.openPath(p.path);
+      return { ok: true };
+    },
+
     // Info do app
     'app:version': () => app.getVersion(),
 
@@ -397,6 +425,23 @@ function registerIpc() {
       throw err;
     }
   });
+}
+
+// ─── Notificação de contas vencendo ──────────────────────────────────────────
+function checkContasVencendo() {
+  try {
+    const vencendo = repositories.getContasVencendoHoje?.() || [];
+    if (vencendo.length === 0) return;
+    if (!Notification.isSupported()) return;
+    const body = vencendo.length === 1
+      ? `A conta "${vencendo[0].descricao}" vence hoje!`
+      : `${vencendo.length} contas vencem hoje!`;
+    const n = new Notification({ title: '⚠️ Contas a Pagar', body });
+    n.on('click', () => { mainWindow?.show(); mainWindow?.focus(); });
+    n.show();
+  } catch (err) {
+    appendLog('checkContasVencendo error:', err);
+  }
 }
 
 // ─── Ciclo de vida ────────────────────────────────────────────────────────────
@@ -421,6 +466,7 @@ app.whenReady().then(() => {
     createWindow();
 
     appendLog('Janela criada, iniciando sync...');
+    checkContasVencendo();
     syncService.syncNow().catch((err) => appendLog('Sync startup error:', err));
 
     syncTimer = setInterval(() => {

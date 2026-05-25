@@ -161,6 +161,32 @@ function runMigrations(db) {
     })();
   }
 
+  if (!applied.includes('004_contas')) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS contas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          uuid TEXT UNIQUE,
+          descricao TEXT NOT NULL,
+          valor REAL DEFAULT 0,
+          vencimento TEXT,
+          pago INTEGER NOT NULL DEFAULT 0,
+          pagoEm TEXT,
+          comprovantePath TEXT,
+          categoria TEXT DEFAULT '',
+          observacao TEXT DEFAULT '',
+          createdAt TEXT NOT NULL,
+          updatedAt TEXT NOT NULL,
+          deletedAt TEXT,
+          deviceId TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_contas_vencimento ON contas(vencimento);
+        CREATE INDEX IF NOT EXISTS idx_contas_pago ON contas(pago);
+      `);
+      db.prepare('INSERT INTO migrations (id, name, appliedAt) VALUES (?, ?, ?)').run(4, '004_contas', nowIso());
+    })();
+  }
+
   if (!applied.includes('003_offline_sync')) {
     db.transaction(() => {
       for (const table of ['empresas', 'clientes', 'operacoes', 'pagamentos']) {

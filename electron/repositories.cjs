@@ -674,6 +674,51 @@ function createRepositories(db) {
     if (enqueue && raw) enqueueSync('operacoes', id, 'UPDATE', raw);
   }
 
+  // ─── Contas a Pagar ──────────────────────────────────────────────────────────
+  function listContas({ incluirPagas = true } = {}) {
+    const sql = incluirPagas
+      ? `SELECT * FROM contas WHERE deletedAt IS NULL ORDER BY CASE WHEN pago=0 THEN 0 ELSE 1 END, vencimento ASC, id DESC`
+      : `SELECT * FROM contas WHERE deletedAt IS NULL AND pago=0 ORDER BY vencimento ASC, id DESC`;
+    return db.prepare(sql).all();
+  }
+
+  function saveConta(input) {
+    const now = nowIso();
+    const deviceId = getDeviceId();
+    if (input.id) {
+      db.prepare(`
+        UPDATE contas SET descricao=@descricao, valor=@valor, vencimento=@vencimento,
+          categoria=@categoria, observacao=@observacao, updatedAt=@updatedAt
+        WHERE id=@id
+      `).run({ descricao: input.descricao, valor: Number(input.valor) || 0, vencimento: input.vencimento || null, categoria: input.categoria || '', observacao: input.observacao || '', updatedAt: now, id: input.id });
+      return db.prepare('SELECT * FROM contas WHERE id = ?').get(input.id);
+    }
+    const result = db.prepare(`
+      INSERT INTO contas (uuid, descricao, valor, vencimento, pago, pagoEm, comprovantePath, categoria, observacao, createdAt, updatedAt, deviceId)
+      VALUES (@uuid, @descricao, @valor, @vencimento, 0, NULL, NULL, @categoria, @observacao, @createdAt, @updatedAt, @deviceId)
+    `).run({ uuid: randomUUID(), descricao: input.descricao || '', valor: Number(input.valor) || 0, vencimento: input.vencimento || null, categoria: input.categoria || '', observacao: input.observacao || '', createdAt: now, updatedAt: now, deviceId });
+    return db.prepare('SELECT * FROM contas WHERE id = ?').get(result.lastInsertRowid);
+  }
+
+  function deleteConta(id) {
+    const now = nowIso();
+    return db.prepare('UPDATE contas SET deletedAt=?, updatedAt=? WHERE id=?').run(now, now, id).changes;
+  }
+
+  function pagarConta(id, pago) {
+    const now = nowIso();
+    return db.prepare('UPDATE contas SET pago=?, pagoEm=?, updatedAt=? WHERE id=?').run(pago ? 1 : 0, pago ? now : null, now, id).changes;
+  }
+
+  function salvarComprovanteConta(id, comprovantePath) {
+    return db.prepare('UPDATE contas SET comprovantePath=?, updatedAt=? WHERE id=?').run(comprovantePath, nowIso(), id).changes;
+  }
+
+  function getContasVencendoHoje() {
+    const today = nowIso().slice(0, 10);
+    return db.prepare("SELECT * FROM contas WHERE deletedAt IS NULL AND pago=0 AND vencimento=?").all(today);
+  }
+
   function reopenOperacao(id) {
     db.prepare("UPDATE operacoes SET status = 'EM_ANDAMENTO', updatedAt = ?, syncStatus = 'PENDING' WHERE id = ?").run(nowIso(), id);
     const saved = getOperacao(id);
@@ -1298,6 +1343,7 @@ function createRepositories(db) {
 
   return {
     applyRemoteRecord,
+    deleteConta,
     deleteCliente,
     deleteEmpresa,
     deleteOperacao,
@@ -1308,9 +1354,11 @@ function createRepositories(db) {
     getHistoricalDashboard,
     getOperationalDashboard,
     getOperacao,
+    getContasVencendoHoje,
     getRemotePayload,
     getSyncStatus,
     importBackup,
+    listContas,
     listClientes,
     listEmpresas,
     listOperacoes,
@@ -1320,7 +1368,10 @@ function createRepositories(db) {
     listSyncQueue,
     markSyncQueueError,
     markSyncQueueSynced,
+    pagarConta,
     reopenOperacao,
+    saveConta,
+    salvarComprovanteConta,
     saveCliente,
     saveEmpresa,
     saveOperacao,
