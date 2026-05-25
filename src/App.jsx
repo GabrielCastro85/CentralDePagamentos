@@ -80,6 +80,7 @@ const emptyEmpresa = {
   agencia: '',
   conta: '',
   ativo: true,
+  destaque: false,
 }
 
 const emptyCliente = {
@@ -521,7 +522,10 @@ function EmpresasPage({ empresas, runAction, requestConfirm }) {
             <Input label="Agência" value={form.agencia} onChange={(agencia) => setForm({ ...form, agencia })} />
             <Input label="Conta" value={form.conta} onChange={(conta) => setForm({ ...form, conta })} />
           </div>
-          <Toggle label="Ativo" checked={form.ativo} onChange={(ativo) => setForm({ ...form, ativo })} />
+          <div className="toggle-row">
+            <Toggle label="Ativo" checked={form.ativo} onChange={(ativo) => setForm({ ...form, ativo })} />
+            <Toggle label="⭐ Destacar transações desta conta" checked={form.destaque} onChange={(destaque) => setForm({ ...form, destaque })} />
+          </div>
           <FormActions editing={editing} onCancel={() => setForm(emptyEmpresa)} />
         </form>
       }
@@ -533,8 +537,8 @@ function EmpresasPage({ empresas, runAction, requestConfirm }) {
               <tr><td colSpan="8"><EmptyState title="Nenhuma empresa cadastrada." text="Crie uma empresa ou conta para começar a registrar operações." /></td></tr>
             )}
             {empresas.map((empresa) => (
-              <tr key={empresa.id}>
-                <td>{empresa.apelido}</td>
+              <tr key={empresa.id} style={empresa.destaque ? { background: 'linear-gradient(90deg, rgba(250,204,21,0.10) 0%, transparent 100%)', borderLeft: '3px solid #eab308' } : {}}>
+                <td>{empresa.apelido}{empresa.destaque && <span title="Transações destacadas" style={{ marginLeft: 6 }}>⭐</span>}</td>
                 <td>{empresa.razaoSocial}</td>
                 <td>{formatCpfCnpj(empresa.cnpj)}</td>
                 <td>{empresa.banco}</td>
@@ -844,6 +848,11 @@ function OperationDetail({ operacao, pagamentos, onBack, onNewPayment, onImportL
           <InfoTile label="CNPJ" value={formatCpfCnpj(operacao.empresaCnpj)} />
           <InfoTile label="Status" value={statusLabel(operacao.status)} />
         </div>
+        {operacao.empresaDestaque && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, background: 'rgba(250,204,21,0.12)', border: '1px solid #eab308', color: '#a16207', fontWeight: 600, fontSize: 13 }}>
+            ⭐ Operação vinculada à conta destacada: {operacao.empresaApelido}
+          </div>
+        )}
         {alerts.length > 0 && (
           <div className="detail-alert-strip">
             {alerts.map((alert) => <Alert key={alert} label={alert} tone="warn" />)}
@@ -1677,10 +1686,10 @@ function OperationsTable({ operacoes, onOpen, goOperations, extraActions }) {
             </tr>
           )}
           {operacoes.map((op) => (
-            <tr key={op.id}>
+            <tr key={op.id} style={op.empresaDestaque ? { background: 'linear-gradient(90deg, rgba(250,204,21,0.10) 0%, transparent 60%)', borderLeft: '3px solid #eab308' } : {}}>
               <td><button className="link-button" onClick={() => { onOpen?.(op.id); goOperations?.() }}>{op.codigo}</button></td>
               <td>{op.clienteNome}</td>
-              <td>{op.empresaApelido}</td>
+              <td>{op.empresaApelido}{op.empresaDestaque && <span title="Conta destacada" style={{ marginLeft: 5 }}>⭐</span>}</td>
               <td className="money teal-text">{brl(op.valorRecebido)}</td>
               <td className="money green-text">{brl(op.totalPago)}</td>
               <td className={`money ${op.saldo < 0 ? 'negative' : 'yellow-text'}`}>{brl(op.saldo)}</td>

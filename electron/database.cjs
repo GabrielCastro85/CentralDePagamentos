@@ -187,6 +187,13 @@ function runMigrations(db) {
     })();
   }
 
+  if (!applied.includes('005_empresa_destaque')) {
+    db.transaction(() => {
+      addColumnIfMissing(db, 'empresas', 'destaque', 'INTEGER NOT NULL DEFAULT 0');
+      db.prepare('INSERT INTO migrations (id, name, appliedAt) VALUES (?, ?, ?)').run(5, '005_empresa_destaque', nowIso());
+    })();
+  }
+
   if (!applied.includes('003_offline_sync')) {
     db.transaction(() => {
       for (const table of ['empresas', 'clientes', 'operacoes', 'pagamentos']) {

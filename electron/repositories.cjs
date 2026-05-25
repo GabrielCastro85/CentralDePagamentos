@@ -211,7 +211,7 @@ function createRepositories(db) {
     const clauses = ['deletedAt IS NULL'];
     if (activeOnly) clauses.push('ativo = 1');
     const sql = `SELECT * FROM empresas WHERE ${clauses.join(' AND ')} ORDER BY apelido`;
-    return db.prepare(sql).all().map((row) => toBool(row, ['ativo']));
+    return db.prepare(sql).all().map((row) => toBool(row, ['ativo', 'destaque']));
   }
 
   function saveEmpresa(input) {
@@ -227,6 +227,7 @@ function createRepositories(db) {
       agencia: input.agencia?.trim() || '',
       conta: input.conta?.trim() || '',
       ativo: boolToInt(input.ativo !== false),
+      destaque: boolToInt(input.destaque || false),
       updatedAt: nowIso(),
       ...syncDefaults(input),
     };
@@ -235,7 +236,7 @@ function createRepositories(db) {
       db.prepare(`
         UPDATE empresas
         SET apelido=@apelido, razaoSocial=@razaoSocial, cnpj=@cnpj, banco=@banco,
-            agencia=@agencia, conta=@conta, ativo=@ativo, updatedAt=@updatedAt,
+            agencia=@agencia, conta=@conta, ativo=@ativo, destaque=@destaque, updatedAt=@updatedAt,
             uuid=COALESCE(uuid, @uuid), syncStatus=@syncStatus, lastSyncedAt=@lastSyncedAt,
             deviceId=@deviceId, deletedAt=@deletedAt
         WHERE id=@id
@@ -243,24 +244,24 @@ function createRepositories(db) {
       const saved = getRaw('empresas', input.id);
       enqueueSync('empresas', input.id, 'UPDATE', saved);
       logAudit('UPDATE', 'empresas', input.id, { uuid: saved.uuid });
-      return toBool(saved, ['ativo']);
+      return toBool(saved, ['ativo', 'destaque']);
     }
 
     const createdAt = nowIso();
     const result = db.prepare(`
       INSERT INTO empresas (
-        apelido, razaoSocial, cnpj, banco, agencia, conta, ativo, createdAt, updatedAt,
+        apelido, razaoSocial, cnpj, banco, agencia, conta, ativo, destaque, createdAt, updatedAt,
         uuid, deletedAt, syncStatus, lastSyncedAt, deviceId
       )
       VALUES (
-        @apelido, @razaoSocial, @cnpj, @banco, @agencia, @conta, @ativo, @createdAt, @updatedAt,
+        @apelido, @razaoSocial, @cnpj, @banco, @agencia, @conta, @ativo, @destaque, @createdAt, @updatedAt,
         @uuid, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId
       )
     `).run({ ...payload, createdAt });
     const saved = getRaw('empresas', result.lastInsertRowid);
     enqueueSync('empresas', result.lastInsertRowid, 'CREATE', saved);
     logAudit('CREATE', 'empresas', result.lastInsertRowid, { uuid: saved.uuid });
-    return toBool(saved, ['ativo']);
+    return toBool(saved, ['ativo', 'destaque']);
   }
 
   function getEmpresa(id) {
@@ -474,6 +475,7 @@ function createRepositories(db) {
         c.nomeCurto AS clienteNome,
         e.apelido AS empresaApelido,
         e.cnpj AS empresaCnpj,
+        e.destaque AS empresaDestaque,
         COALESCE(SUM(CASE WHEN p.pago = 1 THEN p.valor ELSE 0 END), 0) AS totalPago,
         COALESCE(SUM(CASE WHEN p.pago = 0 THEN 1 ELSE 0 END), 0) AS pagamentosPendentes,
         COALESCE(SUM(CASE WHEN p.pago = 1 AND p.comprovanteEnviado = 0 THEN 1 ELSE 0 END), 0) AS comprovantesPendentes,
@@ -497,6 +499,7 @@ function createRepositories(db) {
       totalPago,
       saldo,
       alertaSaldoNegativo: saldo < 0,
+      empresaDestaque: Boolean(row.empresaDestaque),
       pagamentosPendentes: Number(row.pagamentosPendentes || 0),
       comprovantesPendentes: Number(row.comprovantesPendentes || 0),
       quantidadePagamentos: Number(row.quantidadePagamentos || 0),
