@@ -536,16 +536,18 @@ function createRepositories(db) {
     if (!skipFormatValidation && input.documento && !isValidCpfOrCnpj(input.documento)) {
       throw new Error('CPF/CNPJ do favorecido inválido. Confira os números informados.');
     }
-    if (tipoPagamento === 'PIX') {
-      required(input.chavePix, 'Informe a chave PIX.');
-      if (!skipFormatValidation && !isValidPixKey(input.chavePix)) {
-        throw new Error('Chave PIX inválida. Use CPF, CNPJ, e-mail, telefone ou chave aleatória válida.');
+    if (!skipFormatValidation) {
+      if (tipoPagamento === 'PIX') {
+        required(input.chavePix, 'Informe a chave PIX.');
+        if (!isValidPixKey(input.chavePix)) {
+          throw new Error('Chave PIX inválida. Use CPF, CNPJ, e-mail, telefone ou chave aleatória válida.');
+        }
       }
-    }
-    if (tipoPagamento === 'CONTA_BANCARIA') {
-      required(input.banco, 'Informe o banco do favorecido.');
-      required(input.agencia, 'Informe a agência do favorecido.');
-      required(input.conta, 'Informe a conta do favorecido.');
+      if (tipoPagamento === 'CONTA_BANCARIA') {
+        required(input.banco, 'Informe o banco do favorecido.');
+        required(input.agencia, 'Informe a agência do favorecido.');
+        required(input.conta, 'Informe a conta do favorecido.');
+      }
     }
     const pago = boolToInt(input.pago);
     const comprovanteEnviado = boolToInt(input.comprovanteEnviado);
