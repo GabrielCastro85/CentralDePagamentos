@@ -7,6 +7,8 @@ import {
   ArrowRight,
   BarChart2,
   BadgeDollarSign,
+  ChevronLeft,
+  ChevronRight,
   Banknote,
   Bell,
   Building2,
@@ -153,6 +155,7 @@ function App() {
   const [appVersion, setAppVersion] = useState('...')
   const [updateState, setUpdateState] = useState(null)
   const [contas, setContas] = useState([])
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   async function loadContas() {
     try {
@@ -302,42 +305,65 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="brand">
-          <img src={logoSymbol} alt="" className="brand-symbol" />
-          <div>
-            <strong>Central de Pagamentos</strong>
-            <span>Corretora / Exportadora de café</span>
+    <div className={`app-shell${sidebarOpen ? '' : ' sidebar-collapsed'}`}>
+      <aside className={`sidebar${sidebarOpen ? '' : ' collapsed'}`}>
+        <div className="sidebar-top">
+          <div className="brand">
+            <img src={logoSymbol} alt="" className="brand-symbol" />
+            <div className="brand-text">
+              <strong>Central de Pagamentos</strong>
+              <span>Corretora / Exportadora de café</span>
+            </div>
           </div>
+          <button
+            className="sidebar-collapse-btn"
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? 'Recolher menu' : 'Expandir menu'}
+          >
+            {sidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
+          </button>
         </div>
 
         <nav className="nav-list">
           {tabs.map(([id, Icon, label]) => (
-            <button key={id} className={activeTab === id ? 'active' : ''} onClick={() => setActiveTab(id)}>
+            <button
+              key={id}
+              className={activeTab === id ? 'active' : ''}
+              onClick={() => setActiveTab(id)}
+              title={!sidebarOpen ? label : undefined}
+            >
               <Icon size={18} />
-              {label}
+              <span className="nav-label">{label}</span>
             </button>
           ))}
         </nav>
 
-        <div className="sidebar-footer">
-          <div className="sync-status">
-            <span className={`status-dot ${syncTone(syncStatus)}`}></span>
-            <div>
-              <strong>Dados</strong>
-              <span>{syncLabel(syncStatus)}</span>
+        {sidebarOpen ? (
+          <div className="sidebar-footer">
+            <div className="sync-status">
+              <span className={`status-dot ${syncTone(syncStatus)}`}></span>
+              <div>
+                <strong>Dados</strong>
+                <span>{syncLabel(syncStatus)}</span>
+              </div>
+            </div>
+            <div className="sidebar-meta">
+              <span>Local: <strong>Banco de dados local</strong></span>
+              <span>Último backup: <strong>{lastBackup ? formatDateTime(new Date(lastBackup.createdAt)) : '—'}</strong></span>
+              <span>Pendências: <strong>{syncStatus.pending || 0}</strong></span>
+              <button className="sidebar-sync-button" onClick={syncNow} disabled={syncStatus.state === 'syncing'}>
+                <RefreshCw size={14} />Sincronizar agora
+              </button>
             </div>
           </div>
-          <div className="sidebar-meta">
-            <span>Local: <strong>Banco de dados local</strong></span>
-            <span>Último backup: <strong>{lastBackup ? formatDateTime(new Date(lastBackup.createdAt)) : '—'}</strong></span>
-            <span>Pendências: <strong>{syncStatus.pending || 0}</strong></span>
-            <button className="sidebar-sync-button" onClick={syncNow} disabled={syncStatus.state === 'syncing'}>
-              <RefreshCw size={14} />Sincronizar agora
-            </button>
+        ) : (
+          <div className="sidebar-footer-mini">
+            <span
+              className={`status-dot ${syncTone(syncStatus)}`}
+              title={`Dados: ${syncLabel(syncStatus)}${syncStatus.pending ? ` (${syncStatus.pending} pendência${syncStatus.pending > 1 ? 's' : ''})` : ''}`}
+            />
           </div>
-        </div>
+        )}
       </aside>
 
       <main className="workspace">

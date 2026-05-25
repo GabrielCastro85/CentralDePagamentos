@@ -215,8 +215,8 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1360,
     height: 900,
-    minWidth: 1100,
-    minHeight: 720,
+    minWidth: 900,
+    minHeight: 680,
     title: 'Central de Pagamentos',
     backgroundColor: '#0B1220',
     autoHideMenuBar: true,
