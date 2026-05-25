@@ -341,6 +341,59 @@ function registerIpc() {
       return { canceled: false, filePath: result.filePath };
     },
 
+    'relatorio:gerar': (p) => repositories.gerarRelatorio(p),
+
+    'relatorio:exportarCSV': async (p) => {
+      const { dataInicio, dataFim, clienteId, pago } = p;
+      const stamp = dataInicio && dataFim ? `${dataInicio}_${dataFim}` : new Date().toISOString().slice(0, 10);
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Salvar relatório',
+        defaultPath: path.join(getExportsDir(), `relatorio-${stamp}.csv`),
+        filters: [{ name: 'Planilha CSV (Excel)', extensions: ['csv'] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+      const csv = repositories.gerarCSVRelatorio({ dataInicio, dataFim, clienteId, pago });
+      fs.writeFileSync(result.filePath, csv, 'utf8');
+      repositories.logAudit('EXPORT_RELATORIO_CSV', 'relatorio', null, { dataInicio, dataFim });
+      appendLog(`Relatório CSV exportado: ${result.filePath}`);
+      return { canceled: false, filePath: result.filePath };
+    },
+
+    'relatorio:exportarPDF': async (p) => {
+      const { html, filename } = p;
+      const stamp = new Date().toISOString().slice(0, 10);
+      const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Salvar relatório PDF',
+        defaultPath: path.join(getExportsDir(), filename || `relatorio-${stamp}.pdf`),
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
+      });
+      if (result.canceled || !result.filePath) return { canceled: true };
+
+      const tmpPath = path.join(getExportsDir(), `_tmp_relatorio_${Date.now()}.html`);
+      fs.writeFileSync(tmpPath, html, 'utf8');
+
+      const win = new BrowserWindow({
+        show: false,
+        webPreferences: { nodeIntegration: false, contextIsolation: true },
+      });
+      try {
+        await win.loadFile(tmpPath);
+        const pdfBuffer = await win.webContents.printToPDF({
+          printBackground: true,
+          pageSize: 'A4',
+          landscape: true,
+          margins: { top: 0.5, bottom: 0.5, left: 0.5, right: 0.5 },
+        });
+        fs.writeFileSync(result.filePath, pdfBuffer);
+      } finally {
+        win.destroy();
+        try { fs.unlinkSync(tmpPath); } catch { /* ignorar */ }
+      }
+      repositories.logAudit('EXPORT_RELATORIO_PDF', 'relatorio', null, {});
+      appendLog(`Relatório PDF exportado: ${result.filePath}`);
+      return { canceled: false, filePath: result.filePath };
+    },
+
     // ─── Auto-updater ────────────────────────────────────────────────────────
     'updates:check': async () => {
       if (!app.isPackaged) {

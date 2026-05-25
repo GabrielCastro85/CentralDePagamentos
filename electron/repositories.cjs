@@ -1009,6 +1009,103 @@ function createRepositories(db) {
     return `"${text.replaceAll('"', '""')}"`;
   }
 
+  // ─── Relatórios ─────────────────────────────────────────────────────────────
+
+  function gerarRelatorio({ dataInicio, dataFim, clienteId, pago } = {}) {
+    const conditions = ['o.deletedAt IS NULL', 'p.deletedAt IS NULL'];
+    const params = [];
+
+    if (dataInicio)      { conditions.push('p.data >= ?'); params.push(dataInicio); }
+    if (dataFim)         { conditions.push('p.data <= ?'); params.push(dataFim); }
+    if (clienteId)       { conditions.push('o.clienteId = ?'); params.push(Number(clienteId)); }
+    if (pago === true)   { conditions.push('p.pago = 1'); }
+    if (pago === false)  { conditions.push('p.pago = 0'); }
+
+    const rows = db.prepare(`
+      SELECT
+        p.id          AS pagamentoId,
+        o.codigo      AS operacao,
+        o.data        AS dataOperacao,
+        o.valorRecebido,
+        o.status      AS operacaoStatus,
+        c.nomeCurto   AS cliente,
+        e.apelido     AS empresa,
+        e.cnpj        AS cnpjEmpresa,
+        p.data        AS data,
+        p.favorecido,
+        p.documento,
+        p.tipoPagamento,
+        p.chavePix,
+        p.banco,
+        p.agencia,
+        p.conta,
+        p.digito,
+        p.valor,
+        p.pago,
+        p.comprovanteEnviado,
+        p.observacao
+      FROM pagamentos p
+      JOIN operacoes o ON o.id = p.operacaoId
+      JOIN clientes  c ON c.id = o.clienteId
+      JOIN empresas  e ON e.id = o.empresaId
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY p.data DESC, o.id DESC, p.id ASC
+    `).all(...params);
+
+    return rows.map((r) => ({
+      ...r,
+      pago: Boolean(r.pago),
+      comprovanteEnviado: Boolean(r.comprovanteEnviado),
+    }));
+  }
+
+  function gerarCSVRelatorio({ dataInicio, dataFim, clienteId, pago } = {}) {
+    const rows = gerarRelatorio({ dataInicio, dataFim, clienteId, pago });
+
+    const fmtDate  = (d) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '');
+    const fmtMoney = (v) => Number(v || 0).toFixed(2).replace('.', ',');
+    const statusLabel = (s) => ({
+      AGUARDANDO_LISTA: 'Aguardando lista',
+      EM_ANDAMENTO: 'Em andamento',
+      AGUARDANDO_COMPROVANTES: 'Aguardando comprovantes',
+      CONCLUIDA: 'Concluída',
+    }[s] || s || '');
+
+    const headers = [
+      'Data Pagamento', 'Operação', 'Cliente', 'Empresa', 'CNPJ Empresa',
+      'Favorecido', 'Documento (CPF/CNPJ)', 'Tipo', 'Chave PIX / Conta',
+      'Banco', 'Agência', 'Conta', 'Valor (R$)', 'Pago', 'Comprovante',
+      'Status Operação', 'Observação',
+    ];
+
+    const dataRows = rows.map((r) => [
+      fmtDate(r.data),
+      r.operacao || '',
+      r.cliente  || '',
+      r.empresa  || '',
+      r.cnpjEmpresa || '',
+      r.favorecido  || '',
+      r.documento   || '',
+      r.tipoPagamento === 'PIX' ? 'PIX' : 'Conta Bancária',
+      r.chavePix  || (r.agencia && r.conta ? `Ag ${r.agencia} Conta ${r.conta}${r.digito ? '-' + r.digito : ''}` : ''),
+      r.banco    || '',
+      r.agencia  || '',
+      r.conta ? (r.digito ? `${r.conta}-${r.digito}` : r.conta) : '',
+      fmtMoney(r.valor),
+      r.pago ? 'Sim' : 'Não',
+      r.comprovanteEnviado ? 'Enviado' : 'Pendente',
+      statusLabel(r.operacaoStatus),
+      r.observacao || '',
+    ]);
+
+    // BOM + cabeçalho + linhas
+    const bom = '﻿';
+    const lines = [headers, ...dataRows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(';'))
+      .join('\r\n');
+    return bom + lines;
+  }
+
   function getSyncStatus() {
     const pending = db.prepare('SELECT COUNT(*) AS count FROM sync_queue WHERE syncedAt IS NULL').get().count;
     const errors = db.prepare("SELECT COUNT(*) AS count FROM sync_queue WHERE syncedAt IS NULL AND error IS NOT NULL AND error != ''").get().count;
@@ -1361,6 +1458,8 @@ function createRepositories(db) {
     deletePagamento,
     exportBackup,
     exportCsv,
+    gerarRelatorio,
+    gerarCSVRelatorio,
     getConfig,
     getHistoricalDashboard,
     getOperationalDashboard,

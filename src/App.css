@@ -366,6 +366,10 @@ h2 {
   gap: 14px;
 }
 
+.card-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .card-grid.five {
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
@@ -821,6 +825,40 @@ textarea::placeholder {
 
 .detail-totals strong {
   color: var(--text);
+}
+
+/* ─── Relatórios ─────────────────────────────────────────────────────────── */
+
+.relatorio-filters {
+  display: grid;
+  gap: 16px;
+}
+
+.relatorio-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.relatorio-presets button {
+  min-height: 34px;
+  padding: 6px 14px;
+}
+
+.relatorio-inputs {
+  align-items: flex-end;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.relatorio-inputs > * {
+  flex: 1 1 160px;
+  max-width: 260px;
+}
+
+.relatorio-inputs > button {
+  flex: 0 0 auto;
 }
 
 .backup-grid {
@@ -1498,6 +1536,10 @@ textarea::placeholder {
 }
 
 @media (max-width: 1280px) {
+  .card-grid.four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .card-grid.five,
   .card-grid.six,
   .form-grid.five,

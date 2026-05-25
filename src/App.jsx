@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  BarChart2,
   BadgeDollarSign,
   Banknote,
   Bell,
@@ -64,6 +65,7 @@ const tabs = [
   ['historico', History, 'Histórico'],
   ['operacoes', WalletCards, 'Operações'],
   ['contas', Receipt, 'Contas a Pagar'],
+  ['relatorio', BarChart2, 'Relatórios'],
   ['empresas', Building2, 'Empresas / Contas'],
   ['clientes', Users, 'Clientes'],
   ['backup', DatabaseBackup, 'Backup'],
@@ -383,6 +385,7 @@ function App() {
         {activeTab === 'empresas' && <EmpresasPage empresas={state.empresas} runAction={runAction} requestConfirm={requestConfirm} />}
         {activeTab === 'clientes' && <ClientesPage clientes={state.clientes} runAction={runAction} requestConfirm={requestConfirm} />}
         {activeTab === 'contas' && <ContasPage contas={contas} onRefresh={loadContas} runAction={runAction} requestConfirm={requestConfirm} />}
+        {activeTab === 'relatorio' && <RelatorioPage clientes={state.clientes} />}
         {activeTab === 'operacoes' && (
           <OperacoesPage
             empresas={state.empresas}
@@ -2027,12 +2030,325 @@ function ConfirmModal({ modal, onClose }) {
   )
 }
 
+// ─── Relatórios ──────────────────────────────────────────────────────────────
+
+const PERIODO_PRESETS = [
+  ['hoje', 'Hoje'],
+  ['semana', 'Esta semana'],
+  ['mes', 'Este mês'],
+  ['mespassado', 'Mês passado'],
+  ['custom', 'Personalizado'],
+]
+
+function computeRelPeriodo(tipo) {
+  const now = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  const todayStr = fmt(now)
+  switch (tipo) {
+    case 'hoje': return { inicio: todayStr, fim: todayStr }
+    case 'semana': {
+      const dow = now.getDay() || 7
+      const mon = new Date(now)
+      mon.setDate(now.getDate() - dow + 1)
+      return { inicio: fmt(mon), fim: todayStr }
+    }
+    case 'mes': {
+      const y = now.getFullYear(), m = now.getMonth()
+      return { inicio: `${y}-${pad(m + 1)}-01`, fim: todayStr }
+    }
+    case 'mespassado': {
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const last = new Date(now.getFullYear(), now.getMonth(), 0)
+      return { inicio: fmt(prev), fim: fmt(last) }
+    }
+    default: return { inicio: '', fim: '' }
+  }
+}
+
+function buildRelatorioHTML(rows, { dataInicio, dataFim, clienteNome }) {
+  const brlFmt = (v) => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const fmtD = (d) => d ? d.slice(0, 10).split('-').reverse().join('/') : '-'
+  const statusLbl = (s) => ({ AGUARDANDO_LISTA: 'Aguardando', EM_ANDAMENTO: 'Em andamento', AGUARDANDO_COMPROVANTES: 'Ag. comp.', CONCLUIDA: 'Concluída' }[s] || s || '')
+  const periodoLabel = dataInicio && dataFim ? `${fmtD(dataInicio)} a ${fmtD(dataFim)}` : 'Todos os registros'
+  const totalValor = rows.reduce((s, r) => s + r.valor, 0)
+  const pagos = rows.filter((r) => r.pago)
+  const pendentes = rows.filter((r) => !r.pago)
+
+  const tableRows = rows.map((r) => `
+    <tr>
+      <td>${fmtD(r.data)}</td>
+      <td>${r.operacao || '-'}</td>
+      <td>${r.cliente || '-'}</td>
+      <td>${r.empresa || '-'}</td>
+      <td>${r.favorecido || '-'}</td>
+      <td>${r.documento || '-'}</td>
+      <td>${r.tipoPagamento === 'PIX' ? 'PIX' : 'Conta'}</td>
+      <td>${r.tipoPagamento === 'PIX' ? (r.chavePix || '-') : (r.agencia ? `Ag ${r.agencia} • C ${r.conta}${r.digito ? '-' + r.digito : ''}` : '-')}</td>
+      <td class="amt">${brlFmt(r.valor)}</td>
+      <td class="${r.pago ? 'ok' : 'warn'}">${r.pago ? '✓ Pago' : '⏳ Pendente'}</td>
+      <td class="${r.comprovanteEnviado ? 'ok' : 'warn'}">${r.comprovanteEnviado ? '✓ Enviado' : '⏳ Pendente'}</td>
+    </tr>`).join('')
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR"><head><meta charset="UTF-8"><title>Relatório de Movimentações</title><style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#1e293b;background:#fff;padding:20px}
+.hdr{border-bottom:2px solid #1e293b;padding-bottom:12px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start}
+.hdr-title{font-size:18px;font-weight:700;color:#0f172a}
+.hdr-sub{font-size:11px;color:#64748b;margin-top:3px}
+.gen{font-size:10px;color:#94a3b8;text-align:right}
+.summ{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.card{background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 14px}
+.card .lbl{font-size:9px;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:.5px}
+.card .val{font-size:16px;font-weight:700;color:#0f172a;margin-top:2px}
+.card .sub{font-size:9px;color:#94a3b8;margin-top:1px}
+.green .val{color:#16a34a}.amber .val{color:#d97706}
+table{width:100%;border-collapse:collapse}
+thead th{background:#0f172a;color:#fff;padding:6px 8px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;text-align:left;white-space:nowrap}
+tbody td{padding:5px 8px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+tbody tr:nth-child(even) td{background:#f8fafc}
+.amt{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.ok{color:#16a34a;font-weight:600}.warn{color:#d97706;font-weight:600}
+.ftr{margin-top:14px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:9px;color:#94a3b8;display:flex;justify-content:space-between}
+@media print{body{padding:10px}}
+</style></head><body>
+<div class="hdr">
+  <div>
+    <div class="hdr-title">Relatório de Movimentações</div>
+    <div class="hdr-sub">Período: ${periodoLabel}${clienteNome ? ' &nbsp;•&nbsp; Cliente: ' + clienteNome : ''} &nbsp;•&nbsp; ${rows.length} pagamento${rows.length !== 1 ? 's' : ''}</div>
+  </div>
+  <div class="gen">Gerado em<br>${new Date().toLocaleString('pt-BR')}</div>
+</div>
+<div class="summ">
+  <div class="card"><div class="lbl">Total de pagamentos</div><div class="val">${rows.length}</div><div class="sub">${pagos.length} pagos • ${pendentes.length} pendentes</div></div>
+  <div class="card green"><div class="lbl">Total pago</div><div class="val">${brlFmt(pagos.reduce((s, r) => s + r.valor, 0))}</div><div class="sub">${pagos.length} pagamento${pagos.length !== 1 ? 's' : ''}</div></div>
+  <div class="card amber"><div class="lbl">Pendente</div><div class="val">${brlFmt(pendentes.reduce((s, r) => s + r.valor, 0))}</div><div class="sub">${pendentes.length} pagamento${pendentes.length !== 1 ? 's' : ''}</div></div>
+  <div class="card"><div class="lbl">Total geral</div><div class="val">${brlFmt(totalValor)}</div></div>
+</div>
+<table>
+<thead><tr><th>Data</th><th>Operação</th><th>Cliente</th><th>Empresa</th><th>Favorecido</th><th>CPF/CNPJ</th><th>Tipo</th><th>Chave PIX / Conta</th><th>Valor</th><th>Pago</th><th>Comprovante</th></tr></thead>
+<tbody>${tableRows}</tbody>
+</table>
+<div class="ftr"><span>Central de Pagamentos — Documento de uso interno</span><span>Total geral: ${brlFmt(totalValor)}</span></div>
+</body></html>`
+}
+
+function RelatorioPage({ clientes }) {
+  const { inicio: mesInicio, fim: mesFim } = computeRelPeriodo('mes')
+  const [periodo, setPeriodo] = useState('mes')
+  const [dataInicio, setDataInicio] = useState(mesInicio)
+  const [dataFim, setDataFim] = useState(mesFim)
+  const [clienteIdFiltro, setClienteIdFiltro] = useState('')
+  const [statusPago, setStatusPago] = useState('')
+  const [dados, setDados] = useState(null)
+  const [carregando, setCarregando] = useState(false)
+  const [exportando, setExportando] = useState('')
+
+  async function doBuscar(di, df, cId, sp) {
+    setCarregando(true)
+    try {
+      const result = await api.invoke('relatorio:gerar', {
+        dataInicio: di || null,
+        dataFim: df || null,
+        clienteId: cId ? Number(cId) : null,
+        pago: sp === 'pago' ? true : sp === 'pendente' ? false : null,
+      })
+      setDados(result)
+    } catch { /* erros mostrados pelo toast global */ } finally {
+      setCarregando(false)
+    }
+  }
+
+  function aplicarPreset(tipo) {
+    setPeriodo(tipo)
+    if (tipo === 'custom') return
+    const { inicio, fim } = computeRelPeriodo(tipo)
+    setDataInicio(inicio)
+    setDataFim(fim)
+    doBuscar(inicio, fim, clienteIdFiltro, statusPago)
+  }
+
+  function buscarCustom() {
+    doBuscar(dataInicio, dataFim, clienteIdFiltro, statusPago)
+  }
+
+  function onChangeCliente(v) {
+    setClienteIdFiltro(v)
+    if (periodo !== 'custom' || (dataInicio && dataFim)) {
+      doBuscar(dataInicio, dataFim, v, statusPago)
+    }
+  }
+
+  function onChangeStatus(v) {
+    setStatusPago(v)
+    if (periodo !== 'custom' || (dataInicio && dataFim)) {
+      doBuscar(dataInicio, dataFim, clienteIdFiltro, v)
+    }
+  }
+
+  // Load on mount with default period (este mês)
+  useEffect(() => { doBuscar(mesInicio, mesFim, '', '') }, [])
+
+  const resumo = useMemo(() => {
+    if (!dados) return { total: 0, totalValor: 0, pagosVal: 0, pagosCount: 0, pendentesVal: 0, pendentesCount: 0 }
+    const pagos = dados.filter((r) => r.pago)
+    const pendentes = dados.filter((r) => !r.pago)
+    return {
+      total: dados.length,
+      totalValor: dados.reduce((s, r) => s + r.valor, 0),
+      pagosVal: pagos.reduce((s, r) => s + r.valor, 0),
+      pagosCount: pagos.length,
+      pendentesVal: pendentes.reduce((s, r) => s + r.valor, 0),
+      pendentesCount: pendentes.length,
+    }
+  }, [dados])
+
+  async function exportarCSV() {
+    setExportando('csv')
+    try {
+      await api.invoke('relatorio:exportarCSV', {
+        dataInicio: dataInicio || null,
+        dataFim: dataFim || null,
+        clienteId: clienteIdFiltro ? Number(clienteIdFiltro) : null,
+        pago: statusPago === 'pago' ? true : statusPago === 'pendente' ? false : null,
+      })
+    } finally { setExportando('') }
+  }
+
+  async function exportarPDF() {
+    if (!dados?.length) return
+    setExportando('pdf')
+    try {
+      const clienteNome = clientes.find((c) => String(c.id) === String(clienteIdFiltro))?.nomeCurto
+      const html = buildRelatorioHTML(dados, { dataInicio, dataFim, clienteNome })
+      const stamp = dataInicio && dataFim ? `${dataInicio}_${dataFim}` : new Date().toISOString().slice(0, 10)
+      await api.invoke('relatorio:exportarPDF', { html, filename: `relatorio-${stamp}.pdf` })
+    } finally { setExportando('') }
+  }
+
+  const exportActions = (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <button className="ghost" onClick={exportarCSV} disabled={!dados?.length || !!exportando}>
+        <Download size={16} />{exportando === 'csv' ? 'Exportando…' : 'CSV / Excel'}
+      </button>
+      <button className="primary" onClick={exportarPDF} disabled={!dados?.length || !!exportando}>
+        <FileDown size={16} />{exportando === 'pdf' ? 'Gerando PDF…' : 'Exportar PDF'}
+      </button>
+    </div>
+  )
+
+  return (
+    <section className="stack">
+      {/* ─── Filtros ─── */}
+      <Panel title="Filtros" action={exportActions}>
+        <div className="relatorio-filters">
+          <div className="relatorio-presets">
+            {PERIODO_PRESETS.map(([k, label]) => (
+              <button key={k} className={periodo === k ? 'primary' : 'ghost'} onClick={() => aplicarPreset(k)}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="relatorio-inputs">
+            <Input label="Data início" type="date" value={dataInicio} onChange={setDataInicio} />
+            <Input label="Data fim" type="date" value={dataFim} onChange={setDataFim} />
+            <Select
+              label="Cliente"
+              value={clienteIdFiltro}
+              onChange={onChangeCliente}
+              options={[['', 'Todos os clientes'], ...clientes.filter((c) => c.ativo).map((c) => [c.id, c.nomeCurto])]}
+            />
+            <Select
+              label="Status"
+              value={statusPago}
+              onChange={onChangeStatus}
+              options={[['', 'Todos'], ['pago', 'Pagos'], ['pendente', 'Pendentes']]}
+            />
+            {periodo === 'custom' && (
+              <button className="primary" style={{ alignSelf: 'flex-end' }} onClick={buscarCustom}>
+                <Search size={16} /> Buscar
+              </button>
+            )}
+          </div>
+        </div>
+      </Panel>
+
+      {/* ─── Resumo ─── */}
+      {dados !== null && (
+        <div className="card-grid four">
+          <Metric icon={ListChecks} tone="teal" title="Pagamentos" value={resumo.total}
+            subtext={`${resumo.pagosCount} pago${resumo.pagosCount !== 1 ? 's' : ''} • ${resumo.pendentesCount} pendente${resumo.pendentesCount !== 1 ? 's' : ''}`} />
+          <Metric icon={CheckCircle2} tone="green" title="Total pago" value={brl(resumo.pagosVal)}
+            subtext={`${resumo.pagosCount} pagamento${resumo.pagosCount !== 1 ? 's' : ''}`} />
+          <Metric icon={Hourglass} tone="yellow" title="Pendente" value={brl(resumo.pendentesVal)}
+            subtext={`${resumo.pendentesCount} pagamento${resumo.pendentesCount !== 1 ? 's' : ''}`} />
+          <Metric icon={WalletCards} tone="strong" title="Total geral" value={brl(resumo.totalValor)}
+            subtext="Soma do período" />
+        </div>
+      )}
+
+      {/* ─── Tabela ─── */}
+      <Panel
+        title={dados !== null ? `${dados.length} pagamento${dados.length !== 1 ? 's' : ''} encontrado${dados.length !== 1 ? 's' : ''}` : 'Resultados'}
+        action={exportActions}
+      >
+        {carregando && <div style={{ padding: 28, textAlign: 'center', color: 'var(--muted)' }}>Carregando…</div>}
+        {!carregando && dados !== null && dados.length === 0 && (
+          <EmptyState title="Nenhum pagamento encontrado" text="Tente ajustar o período ou os filtros." />
+        )}
+        {!carregando && dados?.length > 0 && (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>Operação</th>
+                  <th>Cliente</th>
+                  <th>Empresa</th>
+                  <th>Favorecido</th>
+                  <th>Tipo</th>
+                  <th>Chave PIX / Conta</th>
+                  <th className="money">Valor</th>
+                  <th>Pago</th>
+                  <th>Comprovante</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dados.map((r) => (
+                  <tr key={r.pagamentoId}>
+                    <td>{formatDate(r.data)}</td>
+                    <td><code style={{ fontSize: 11 }}>{r.operacao}</code></td>
+                    <td>{r.cliente}</td>
+                    <td>{r.empresa}</td>
+                    <td>{r.favorecido}</td>
+                    <td><StatusBadge label={r.tipoPagamento === 'PIX' ? 'PIX' : 'Conta'} tone="info" /></td>
+                    <td style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      {r.tipoPagamento === 'PIX'
+                        ? r.chavePix
+                        : r.agencia ? `Ag ${r.agencia} • C ${r.conta}${r.digito ? '-' + r.digito : ''}` : '-'}
+                    </td>
+                    <td className="money teal-text"><strong>{brl(r.valor)}</strong></td>
+                    <td><StatusBadge label={r.pago ? 'Pago' : 'Pendente'} tone={r.pago ? 'ok' : 'warn'} /></td>
+                    <td><StatusBadge label={r.comprovanteEnviado ? 'Enviado' : 'Pendente'} tone={r.comprovanteEnviado ? 'ok' : 'purple'} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Panel>
+    </section>
+  )
+}
+
 function pageTitle(page) {
   const titles = {
     operacional: 'Operacional',
     historico: 'Histórico',
     operacoes: 'Operações',
     contas: 'Contas a Pagar',
+    relatorio: 'Relatórios',
     empresas: 'Empresas / Contas',
     clientes: 'Clientes',
     backup: 'Backup e Exportações',
@@ -2049,6 +2365,7 @@ function pageSubtitle(page) {
     historico: 'Analise operações concluídas e movimentações históricas.',
     operacoes: 'Gerencie entradas financeiras e acompanhe o status das operações.',
     contas: 'Gerencie despesas, boletos e contas fixas com alerta de vencimento.',
+    relatorio: 'Filtre e exporte movimentações por período, cliente ou status.',
     empresas: 'Gerencie contas bancárias e CNPJs utilizados nas operações.',
     clientes: 'Cadastre e gerencie clientes atendidos.',
     backup: 'Proteja seus dados e exporte relatórios operacionais.',
