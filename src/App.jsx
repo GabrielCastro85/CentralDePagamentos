@@ -727,14 +727,24 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
         ['Itens para revisão', reviewCount],
       ],
       onConfirm: () => runAction(async () => {
+        const erros = []
+        let salvos = 0
         for (const row of rows) {
-          await api.invoke('pagamentos:save', {
-            ...emptyPagamento,
-            ...row,
-            operacaoId: selectedOperationId,
-          })
+          try {
+            await api.invoke('pagamentos:save', {
+              ...emptyPagamento,
+              ...row,
+              operacaoId: selectedOperationId,
+              _import: true,
+            })
+            salvos++
+          } catch (err) {
+            erros.push(`${row.favorecido}: ${err.message}`)
+          }
         }
         setImportModal(null)
+        if (salvos === 0) throw new Error(`Nenhum pagamento importado. ${erros[0] || 'Erro desconhecido.'}`)
+        if (erros.length > 0) throw new Error(`${salvos} importado(s), ${erros.length} com erro: ${erros.join(' | ')}`)
       }, `${rows.length} pagamento${rows.length > 1 ? 's' : ''} importado${rows.length > 1 ? 's' : ''}.`),
     })
   }

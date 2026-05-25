@@ -97,8 +97,10 @@ function isValidPixKey(value) {
   const key = String(value || '').trim();
   if (!key) return false;
   const numeric = onlyDigits(key);
-  if (numeric.length === 11 && isValidCpf(numeric)) return true;
-  if (numeric.length === 14 && isValidCnpj(numeric)) return true;
+  // Aceita qualquer número com 11 dígitos (CPF) ou 14 dígitos (CNPJ), sem exigir dígito verificador,
+  // pois chaves PIX podem ser CPFs/CNPJs que não passam na validação aritmética mas são aceitos pelo BCB.
+  if (numeric.length === 11) return true;
+  if (numeric.length === 14) return true;
   if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(key)) return true;
   if (/^\+?\d{10,13}$/.test(numeric)) return true;
   if (/^[a-z0-9-]{25,80}$/i.test(key)) return true;
@@ -524,16 +526,19 @@ function createRepositories(db) {
     required(input.data, 'Informe a data do pagamento.');
     required(input.favorecido, 'Informe o favorecido.');
     const tipoPagamento = input.tipoPagamento || 'PIX';
+    // _import: true pula validações de formato (CPF/CNPJ e chave PIX) para importações
+    // O usuário já revisou os dados na pré-visualização.
+    const skipFormatValidation = Boolean(input._import);
     const valor = normalizeMoney(input.valor);
     if (valor <= 0) {
       throw new Error('Informe um valor de pagamento maior que zero.');
     }
-    if (input.documento && !isValidCpfOrCnpj(input.documento)) {
+    if (!skipFormatValidation && input.documento && !isValidCpfOrCnpj(input.documento)) {
       throw new Error('CPF/CNPJ do favorecido inválido. Confira os números informados.');
     }
     if (tipoPagamento === 'PIX') {
       required(input.chavePix, 'Informe a chave PIX.');
-      if (!isValidPixKey(input.chavePix)) {
+      if (!skipFormatValidation && !isValidPixKey(input.chavePix)) {
         throw new Error('Chave PIX inválida. Use CPF, CNPJ, e-mail, telefone ou chave aleatória válida.');
       }
     }
