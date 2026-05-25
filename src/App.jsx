@@ -156,6 +156,7 @@ function App() {
   const [updateState, setUpdateState] = useState(null)
   const [contas, setContas] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [novaOpModalTrigger, setNovaOpModalTrigger] = useState(0)
 
   async function loadContas() {
     try {
@@ -382,12 +383,9 @@ function App() {
             <button className="ghost icon-only" title="Ajuda" onClick={() => setHelpOpen(true)}>
               <HelpCircle size={18} />
             </button>
-            {activeTab !== 'operacoes' && (
-              <button className="primary" onClick={() => setActiveTab('operacoes')}>
-                <Plus size={16} />
-                Nova operação
-              </button>
-            )}
+            <button className="primary" onClick={() => { setActiveTab('operacoes'); setNovaOpModalTrigger((t) => t + 1) }}>
+              <Plus size={16} /> Nova operação
+            </button>
           </div>
         </header>
 
@@ -423,6 +421,7 @@ function App() {
             pagamentos={pagamentos}
             runAction={runAction}
             requestConfirm={requestConfirm}
+            novaOpModalTrigger={novaOpModalTrigger}
           />
         )}
         {activeTab === 'backup' && <BackupPage runAction={runAction} requestConfirm={requestConfirm} />}
@@ -652,17 +651,26 @@ function ClientesPage({ clientes, runAction, requestConfirm }) {
   )
 }
 
-function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selectedOperationId, setSelectedOperationId, pagamentos, runAction, requestConfirm }) {
+function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selectedOperationId, setSelectedOperationId, pagamentos, runAction, requestConfirm, novaOpModalTrigger }) {
   const [form, setForm] = useState(emptyOperacao)
+  const [newOpModal, setNewOpModal] = useState(false)
   const [paymentModal, setPaymentModal] = useState(null)
   const [importModal, setImportModal] = useState(null)
   const editing = Boolean(form.id)
+
+  useEffect(() => {
+    if (novaOpModalTrigger > 0) {
+      setForm(emptyOperacao)
+      setNewOpModal(true)
+    }
+  }, [novaOpModalTrigger])
 
   async function submitOperation(event) {
     event.preventDefault()
     await runAction(async () => {
       const saved = await api.invoke('operacoes:save', form)
       setForm(emptyOperacao)
+      setNewOpModal(false)
       setSelectedOperationId(saved.id)
     }, editing ? 'Operação atualizada.' : 'Operação criada.')
   }
@@ -810,33 +818,38 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
             onConfirm={importPayments}
           />
         )}
+        {newOpModal && (
+          <NovaOperacaoModal
+            form={form}
+            onChange={setForm}
+            empresas={empresas}
+            clientes={clientes}
+            editing={editing}
+            onClose={() => { setNewOpModal(false); setForm(emptyOperacao) }}
+            onSave={submitOperation}
+          />
+        )}
       </>
     )
   }
 
   return (
     <section className="stack">
-      <Panel title={editing ? 'Editar operação' : 'Criar nova operação'}>
-        <form onSubmit={submitOperation} className="stack">
-          <div className="form-grid three">
-            <Input label="Data" type="date" value={form.data} onChange={(data) => setForm({ ...form, data })} required />
-            <Select label="Cliente" value={form.clienteId} onChange={(clienteId) => setForm({ ...form, clienteId })} options={clientes.filter((c) => c.ativo).map((c) => [c.id, c.nomeCurto])} required />
-            <Select label="Empresa/CNPJ" value={form.empresaId} onChange={(empresaId) => setForm({ ...form, empresaId })} options={empresas.filter((e) => e.ativo).map((e) => [e.id, `${e.apelido} ${e.cnpj ? `- ${formatCpfCnpj(e.cnpj)}` : ''}`])} required />
-            <CurrencyInput label="Valor recebido" value={form.valorRecebido} onChange={(valorRecebido) => setForm({ ...form, valorRecebido })} required />
-            <Input label="Observação" value={form.observacao} onChange={(observacao) => setForm({ ...form, observacao })} />
-          </div>
-          <FormActions editing={editing} onCancel={() => setForm(emptyOperacao)} label={editing ? 'Salvar operação' : 'Nova operação'} />
-        </form>
-      </Panel>
-
-      <Panel title="Operações">
+      <Panel
+        title="Operações"
+        action={
+          <button className="primary" onClick={() => { setForm(emptyOperacao); setNewOpModal(true) }}>
+            <Plus size={16} />Nova operação
+          </button>
+        }
+      >
         <OperationsTable
           operacoes={operacoes}
           onOpen={(id) => setSelectedOperationId(id)}
           extraActions={(op) => (
             <>
               <button className="icon-button" title="Visualizar" onClick={() => setSelectedOperationId(op.id)}><Eye size={16} /></button>
-              <button className="icon-button" title="Editar" onClick={() => setForm(op)}><Pencil size={16} /></button>
+              <button className="icon-button" title="Editar" onClick={() => { setForm(op); setNewOpModal(true) }}><Pencil size={16} /></button>
               {op.status !== 'CONCLUIDA' && <button className="success" onClick={() => concludeOperation(op)}><Check size={15} />Concluir operação</button>}
               {op.status === 'CONCLUIDA' && <button className="ghost" onClick={() => reopenOperation(op)}><RotateCcw size={15} />Reabrir</button>}
               <button className="icon-button danger" title="Excluir" onClick={() => requestConfirm({
@@ -850,7 +863,66 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
           )}
         />
       </Panel>
+
+      {newOpModal && (
+        <NovaOperacaoModal
+          form={form}
+          onChange={setForm}
+          empresas={empresas}
+          clientes={clientes}
+          editing={editing}
+          onClose={() => { setNewOpModal(false); setForm(emptyOperacao) }}
+          onSave={submitOperation}
+        />
+      )}
     </section>
+  )
+}
+
+function NovaOperacaoModal({ form, onChange, empresas, clientes, editing, onClose, onSave }) {
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <section className="modal-card payment-modal-card">
+        <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
+        <div className="modal-heading">
+          <span className="modal-icon"><WalletCards size={24} /></span>
+          <div>
+            <h2>{editing ? 'Editar operação' : 'Nova operação'}</h2>
+            <p>{editing ? 'Atualize os dados desta operação.' : 'Preencha os dados para registrar uma nova operação.'}</p>
+          </div>
+        </div>
+        <form onSubmit={onSave} className="payment-modal-form">
+          <div className="form-grid two">
+            <Input label="Data" type="date" value={form.data} onChange={(data) => onChange({ ...form, data })} required />
+            <Select
+              label="Cliente"
+              value={form.clienteId}
+              onChange={(clienteId) => onChange({ ...form, clienteId })}
+              options={clientes.filter((c) => c.ativo).map((c) => [c.id, c.nomeCurto])}
+              required
+            />
+            <Select
+              label="Empresa / CNPJ"
+              value={form.empresaId}
+              onChange={(empresaId) => onChange({ ...form, empresaId })}
+              options={empresas.filter((e) => e.ativo).map((e) => [e.id, `${e.apelido}${e.cnpj ? ` — ${formatCpfCnpj(e.cnpj)}` : ''}`])}
+              required
+            />
+            <CurrencyInput label="Valor recebido" value={form.valorRecebido} onChange={(valorRecebido) => onChange({ ...form, valorRecebido })} required />
+            {editing && (
+              <Select label="Status" value={form.status} onChange={(status) => onChange({ ...form, status })} options={operationStatuses} />
+            )}
+          </div>
+          <Input label="Observação" value={form.observacao || ''} onChange={(observacao) => onChange({ ...form, observacao })} />
+          <div className="modal-actions">
+            <button type="button" className="ghost" onClick={onClose}>Cancelar</button>
+            <button className="primary" type="submit">
+              <Save size={16} />{editing ? 'Salvar operação' : 'Criar operação'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   )
 }
 
