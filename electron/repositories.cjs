@@ -738,9 +738,17 @@ function createRepositories(db) {
       SELECT
         COUNT(id) AS total,
         SUM(CASE WHEN pago = 0 THEN 1 ELSE 0 END) AS pendentes,
-        SUM(CASE WHEN pago = 1 AND comprovanteEnviado = 0 THEN 1 ELSE 0 END) AS comprovantesFaltando
+        SUM(CASE WHEN pago = 1 AND comprovanteEnviado = 0 THEN 1 ELSE 0 END) AS comprovantesFaltando,
+        SUM(CASE WHEN pago = 1 THEN valor ELSE 0 END) AS totalPago
       FROM pagamentos WHERE operacaoId = ? AND deletedAt IS NULL
     `).get(id);
+
+    // Verifica se ainda há saldo restante (valorRecebido > totalPago)
+    // para não fechar automaticamente operações com saldo pendente.
+    const operacaoRow = db.prepare('SELECT valorRecebido FROM operacoes WHERE id = ?').get(id);
+    const valorRecebido = normalizeMoney(operacaoRow?.valorRecebido || 0);
+    const totalPago = normalizeMoney(stats?.totalPago || 0);
+    const temSaldoRestante = valorRecebido - totalPago > 0.005;
 
     let status;
     if (!stats || stats.total === 0) {
@@ -749,6 +757,10 @@ function createRepositories(db) {
       status = 'EM_ANDAMENTO';
     } else if (stats.comprovantesFaltando > 0) {
       status = 'AGUARDANDO_COMPROVANTES';
+    } else if (temSaldoRestante) {
+      // Todos os pagamentos pagos e comprovantes enviados, mas ainda há saldo
+      // não distribuído — mantém em andamento para o usuário concluir manualmente.
+      status = 'EM_ANDAMENTO';
     } else {
       status = 'CONCLUIDA';
     }

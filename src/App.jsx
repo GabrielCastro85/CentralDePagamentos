@@ -752,15 +752,18 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
   }
 
   async function concludeOperation(op) {
+    const temSaldo = Number(op.saldo) > 0.005
     requestConfirm({
-      tone: 'success',
+      tone: temSaldo ? 'warn' : 'success',
       title: `Concluir operação ${op.codigo}`,
-      text: 'Ao concluir esta operação, ela será movida para o histórico. Confira o resumo antes de confirmar.',
+      text: temSaldo
+        ? `Atenção: ainda há ${brl(op.saldo)} de saldo não distribuído. Ao concluir manualmente, a operação será encerrada mesmo com saldo restante.`
+        : 'Ao concluir esta operação, ela será movida para o histórico. Confira o resumo antes de confirmar.',
       confirmLabel: 'Confirmar conclusão',
       summary: [
         ['Valor recebido', brl(op.valorRecebido)],
         ['Total pago', brl(op.totalPago)],
-        ['Saldo final', brl(op.saldo)],
+        ['Saldo restante', brl(op.saldo)],
         ['Pagamentos pendentes', op.pagamentosPendentes],
         ['Comprovantes pendentes', op.comprovantesPendentes],
       ],
