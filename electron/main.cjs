@@ -274,6 +274,11 @@ function registerIpc() {
     'pagamentos:flags':       (p) => repositories.updatePagamentoFlags(p),
     'pagamentos:delete':      (p) => repositories.deletePagamento(p.id),
 
+    // Recebimentos
+    'recebimentos:list':   (p) => repositories.listRecebimentos(p.operacaoId),
+    'recebimentos:add':    (p) => repositories.addRecebimento(p),
+    'recebimentos:delete': (p) => repositories.deleteRecebimento(p.id),
+
     // Dashboards
     'dashboard:operacional': () => repositories.getOperationalDashboard(),
     'dashboard:historico':   (p) => repositories.getHistoricalDashboard(p),

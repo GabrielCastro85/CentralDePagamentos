@@ -140,6 +140,7 @@ function App() {
   })
   const [selectedOperationId, setSelectedOperationId] = useState(null)
   const [pagamentos, setPagamentos] = useState([])
+  const [recebimentos, setRecebimentos] = useState([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [modal, setModal] = useState(null)
@@ -194,6 +195,14 @@ function App() {
     setPagamentos(await api.invoke('pagamentos:list', { operacaoId }))
   }
 
+  async function loadRecebimentos(operacaoId = selectedOperationId) {
+    if (!operacaoId) {
+      setRecebimentos([])
+      return
+    }
+    setRecebimentos(await api.invoke('recebimentos:list', { operacaoId }))
+  }
+
   async function loadLastBackup() {
     try {
       const backups = await api.invoke('backup:list')
@@ -232,6 +241,7 @@ function App() {
   async function refreshAfterChange() {
     await loadAll()
     await loadPagamentos()
+    await loadRecebimentos()
     await loadLastBackup()
     await loadSyncStatus()
   }
@@ -270,6 +280,7 @@ function App() {
 
   useEffect(() => {
     loadPagamentos(selectedOperationId)
+    loadRecebimentos(selectedOperationId)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedOperationId])
 
@@ -430,6 +441,7 @@ function App() {
             selectedOperationId={selectedOperationId}
             setSelectedOperationId={setSelectedOperationId}
             pagamentos={pagamentos}
+            recebimentos={recebimentos}
             runAction={runAction}
             requestConfirm={requestConfirm}
             novaOpModalTrigger={novaOpModalTrigger}
@@ -714,11 +726,12 @@ function ClientesPage({ clientes, runAction, requestConfirm }) {
   )
 }
 
-function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selectedOperationId, setSelectedOperationId, pagamentos, runAction, requestConfirm, novaOpModalTrigger }) {
+function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selectedOperationId, setSelectedOperationId, pagamentos, recebimentos, runAction, requestConfirm, novaOpModalTrigger }) {
   const [form, setForm] = useState(emptyOperacao)
   const [newOpModal, setNewOpModal] = useState(false)
   const [paymentModal, setPaymentModal] = useState(null)
   const [importModal, setImportModal] = useState(null)
+  const [recebimentoModal, setRecebimentoModal] = useState(false)
   const editing = Boolean(form.id)
 
   useEffect(() => {
@@ -763,6 +776,13 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
       confirmLabel: 'Reabrir operação',
       onConfirm: () => runAction(() => api.invoke('operacoes:reopen', { id: op.id }), 'Operação reaberta.'),
     })
+  }
+
+  async function addRecebimento(recForm) {
+    await runAction(async () => {
+      await api.invoke('recebimentos:add', { ...recForm, operacaoId: selectedOperationId })
+      setRecebimentoModal(false)
+    }, 'Recebimento adicionado.')
   }
 
   async function savePayment(paymentForm) {
@@ -855,8 +875,17 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
         <OperationDetail
           operacao={selectedOperation}
           pagamentos={pagamentos}
+          recebimentos={recebimentos}
           onBack={() => setSelectedOperationId(null)}
           onNewPayment={() => openPaymentModal()}
+          onNewRecebimento={() => setRecebimentoModal(true)}
+          onDeleteRecebimento={(id) => requestConfirm({
+            tone: 'danger',
+            title: 'Remover recebimento?',
+            text: 'O valor será descontado do total recebido desta operação.',
+            confirmLabel: 'Remover recebimento',
+            onConfirm: () => runAction(() => api.invoke('recebimentos:delete', { id }), 'Recebimento removido.'),
+          })}
           onImportList={openImportModal}
           onEditPayment={openPaymentModal}
           onDuplicatePayment={duplicatePayment}
@@ -880,6 +909,12 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
             onChange={setImportModal}
             onClose={() => setImportModal(null)}
             onConfirm={importPayments}
+          />
+        )}
+        {recebimentoModal && (
+          <RecebimentoModal
+            onClose={() => setRecebimentoModal(false)}
+            onSave={addRecebimento}
           />
         )}
         {newOpModal && (
@@ -990,7 +1025,7 @@ function NovaOperacaoModal({ form, onChange, empresas, clientes, editing, onClos
   )
 }
 
-function OperationDetail({ operacao, pagamentos, onBack, onNewPayment, onImportList, onEditPayment, onDuplicatePayment, runAction, requestConfirm, concludeOperation, reopenOperation }) {
+function OperationDetail({ operacao, pagamentos, recebimentos = [], onBack, onNewPayment, onNewRecebimento, onDeleteRecebimento, onImportList, onEditPayment, onDuplicatePayment, runAction, requestConfirm, concludeOperation, reopenOperation }) {
   const [search, setSearch] = useState('')
   const alerts = operationAlerts(operacao, pagamentos)
   const filteredPagamentos = search
@@ -1042,6 +1077,17 @@ function OperationDetail({ operacao, pagamentos, onBack, onNewPayment, onImportL
         <Metric icon={Hourglass} tone="yellow" title="Pagamentos pendentes" value={operacao.pagamentosPendentes} subtext="Ainda não pagos" />
         <Metric icon={Paperclip} tone="purple" title="Comprovantes pendentes" value={operacao.comprovantesPendentes} subtext="Pagos sem comprovante" />
       </div>
+
+      <Panel
+        title="Valores recebidos"
+        action={<button className="primary" onClick={onNewRecebimento}><Plus size={16} />Adicionar recebimento</button>}
+      >
+        <RecebimentosTable recebimentos={recebimentos} onDelete={onDeleteRecebimento} />
+        <div className="detail-totals">
+          <span>Total recebido: <strong className="teal-text">{brl(operacao.valorRecebido)}</strong></span>
+          <span>{recebimentos.length} entrada{recebimentos.length !== 1 ? 's' : ''}</span>
+        </div>
+      </Panel>
 
       <Panel title="Pagamentos desta operação" action={<PaymentsToolbar onNewPayment={onNewPayment} onImportList={onImportList} search={search} onSearch={setSearch} />}>
         <PaymentsTable
@@ -1113,6 +1159,85 @@ function PaymentsTable({ pagamentos, onEditPayment, onDuplicatePayment, runActio
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function RecebimentosTable({ recebimentos, onDelete }) {
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Descrição</th>
+            <th className="money">Valor</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {recebimentos.length === 0 && (
+            <tr>
+              <td colSpan="4">
+                <EmptyState title="Nenhum recebimento registrado" text="Use o botão Adicionar recebimento para registrar valores recebidos nesta operação." />
+              </td>
+            </tr>
+          )}
+          {recebimentos.map((rec) => (
+            <tr key={rec.id}>
+              <td>{formatDate(rec.data)}</td>
+              <td>{rec.descricao || '—'}</td>
+              <td className="money teal-text">{brl(rec.valor)}</td>
+              <td className="table-actions">
+                <button className="icon-button danger" title="Remover" onClick={() => onDelete(rec.id)}>
+                  <Trash2 size={15} />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function RecebimentoModal({ onClose, onSave }) {
+  const [form, setForm] = useState({ data: today, valor: '', descricao: '' })
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    onSave(form)
+  }
+
+  return (
+    <div className="modal-backdrop" role="dialog" aria-modal="true">
+      <section className="modal-card">
+        <button className="modal-close" onClick={onClose} aria-label="Fechar">×</button>
+        <div className="modal-heading">
+          <span className="modal-icon"><Banknote size={24} /></span>
+          <div>
+            <h2>Adicionar recebimento</h2>
+            <p>Registre um novo valor recebido nesta operação. O total será somado automaticamente.</p>
+          </div>
+        </div>
+        <form onSubmit={handleSubmit} className="modal-body">
+          <div className="field-row">
+            <label className="field">
+              <span>Data</span>
+              <input type="date" value={form.data} required onChange={(e) => setForm({ ...form, data: e.target.value })} />
+            </label>
+            <CurrencyInput label="Valor recebido (R$)" value={form.valor} onChange={(valor) => setForm({ ...form, valor })} />
+          </div>
+          <label className="field">
+            <span>Descrição <em style={{ fontWeight: 400, color: 'var(--muted)' }}>(opcional)</em></span>
+            <input placeholder="Ex: Segunda parcela, complemento..." value={form.descricao} onChange={(e) => setForm({ ...form, descricao: e.target.value })} />
+          </label>
+          <div className="modal-actions">
+            <button type="button" className="ghost" onClick={onClose}>Cancelar</button>
+            <button type="submit" className="primary"><Plus size={16} />Adicionar recebimento</button>
+          </div>
+        </form>
+      </section>
     </div>
   )
 }

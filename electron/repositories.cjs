@@ -509,6 +509,44 @@ function createRepositories(db) {
     };
   }
 
+  function listRecebimentos(operacaoId) {
+    return db.prepare(
+      'SELECT * FROM recebimentos WHERE operacaoId = ? ORDER BY data ASC, id ASC'
+    ).all(Number(operacaoId));
+  }
+
+  function addRecebimento({ operacaoId, data, valor, descricao }) {
+    required(operacaoId, 'Operação não informada.');
+    required(data, 'Informe a data do recebimento.');
+    const amount = normalizeMoney(valor);
+    if (amount <= 0) throw new Error('Informe um valor maior que zero.');
+    const now = nowIso();
+    db.prepare(
+      'INSERT INTO recebimentos (operacaoId, data, valor, descricao, createdAt) VALUES (?, ?, ?, ?, ?)'
+    ).run(Number(operacaoId), data, amount, descricao?.trim() || '', now);
+    db.prepare(
+      "UPDATE operacoes SET valorRecebido = valorRecebido + ?, updatedAt = ?, syncStatus = 'PENDING' WHERE id = ?"
+    ).run(amount, now, Number(operacaoId));
+    logAudit('UPDATE', 'operacoes', operacaoId, { tipo: 'add_recebimento', valor: amount });
+    return getOperacao(Number(operacaoId));
+  }
+
+  function deleteRecebimento(id) {
+    const rec = db.prepare('SELECT * FROM recebimentos WHERE id = ?').get(id);
+    if (!rec) throw new Error('Recebimento não encontrado.');
+    const count = db.prepare(
+      'SELECT COUNT(*) AS n FROM recebimentos WHERE operacaoId = ?'
+    ).get(rec.operacaoId).n;
+    if (count <= 1) throw new Error('Não é possível remover o único recebimento. Edite o valor da operação diretamente.');
+    const now = nowIso();
+    db.prepare('DELETE FROM recebimentos WHERE id = ?').run(id);
+    db.prepare(
+      "UPDATE operacoes SET valorRecebido = MAX(0, valorRecebido - ?), updatedAt = ?, syncStatus = 'PENDING' WHERE id = ?"
+    ).run(rec.valor, now, rec.operacaoId);
+    logAudit('UPDATE', 'operacoes', rec.operacaoId, { tipo: 'delete_recebimento', valor: rec.valor });
+    return getOperacao(rec.operacaoId);
+  }
+
   function listFavorecidosFrequentes(clienteId) {
     if (!clienteId) return [];
     return db.prepare(`
@@ -1486,12 +1524,14 @@ function createRepositories(db) {
   }
 
   return {
+    addRecebimento,
     applyRemoteRecord,
     deleteConta,
     deleteCliente,
     deleteEmpresa,
     deleteOperacao,
     deletePagamento,
+    deleteRecebimento,
     exportBackup,
     exportCsv,
     gerarRelatorio,
@@ -1509,6 +1549,7 @@ function createRepositories(db) {
     listEmpresas,
     listFavorecidosFrequentes,
     listOperacoes,
+    listRecebimentos,
     listPagamentos,
     listAuditLogs,
     logAudit,

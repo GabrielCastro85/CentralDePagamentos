@@ -257,6 +257,32 @@ function runMigrations(db) {
       );
     })();
   }
+
+  if (!applied.includes('007_recebimentos')) {
+    db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS recebimentos (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          operacaoId INTEGER NOT NULL,
+          data TEXT NOT NULL,
+          valor REAL NOT NULL DEFAULT 0,
+          descricao TEXT DEFAULT '',
+          createdAt TEXT NOT NULL,
+          FOREIGN KEY (operacaoId) REFERENCES operacoes(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_recebimentos_operacao ON recebimentos(operacaoId);
+      `);
+      db.exec(`
+        INSERT INTO recebimentos (operacaoId, data, valor, descricao, createdAt)
+        SELECT o.id, o.data, o.valorRecebido, 'Recebimento inicial', o.createdAt
+        FROM operacoes o
+        WHERE o.deletedAt IS NULL
+          AND o.valorRecebido > 0
+          AND NOT EXISTS (SELECT 1 FROM recebimentos r WHERE r.operacaoId = o.id);
+      `);
+      db.prepare('INSERT INTO migrations (id, name, appliedAt) VALUES (?, ?, ?)').run(7, '007_recebimentos', nowIso());
+    })();
+  }
 }
 
 function tableColumns(db, table) {
