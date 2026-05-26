@@ -871,6 +871,7 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
             onChange={setPaymentModal}
             onClose={() => setPaymentModal(null)}
             onSave={savePayment}
+            clienteId={selectedOperation?.clienteId}
           />
         )}
         {importModal && (
@@ -1249,12 +1250,35 @@ function ImportListModal({ state, onChange, onClose, onConfirm }) {
   )
 }
 
-function PaymentModal({ payment, onChange, onClose, onSave }) {
+function PaymentModal({ payment, onChange, onClose, onSave, clienteId }) {
   const [formError, setFormError] = useState('')
+  const [frequentes, setFrequentes] = useState([])
+
+  useEffect(() => {
+    if (!clienteId || payment.id) return // só para novo pagamento
+    api.invoke('pagamentos:frequentes', { clienteId })
+      .then(setFrequentes)
+      .catch(() => setFrequentes([]))
+  }, [clienteId, payment.id])
 
   function update(field, value) {
     setFormError('')
     onChange({ ...payment, [field]: value })
+  }
+
+  function applyFrequente(f) {
+    onChange({
+      ...payment,
+      favorecido: f.favorecido,
+      documento: f.documento || '',
+      tipoPagamento: f.tipoPagamento,
+      chavePix: f.chavePix || '',
+      banco: f.banco || '',
+      agencia: f.agencia || '',
+      tipoConta: f.tipoConta || 'NAO_INFORMADO',
+      conta: f.conta || '',
+      digito: f.digito || '',
+    })
   }
 
   function submit(event) {
@@ -1273,6 +1297,25 @@ function PaymentModal({ payment, onChange, onClose, onSave }) {
             <p>Preencha os dados do favorecido e acompanhe pagamento e comprovante.</p>
           </div>
         </div>
+
+        {frequentes.length > 0 && (
+          <div className="frequentes-strip">
+            <span>Favorecidos frequentes neste cliente</span>
+            <div className="frequentes-list">
+              {frequentes.map((f, i) => (
+                <button key={i} type="button" className="frequente-chip" onClick={() => applyFrequente(f)}>
+                  <strong>{f.favorecido}</strong>
+                  <small>
+                    {f.tipoPagamento === 'PIX'
+                      ? `PIX · ${f.chavePix || f.documento || '—'}`
+                      : `${f.banco || '—'} · Ag ${f.agencia || '—'} · C ${f.conta || '—'}`}
+                  </small>
+                  <em>{f.frequencia}× usado{f.frequencia > 1 ? 's' : ''}</em>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <form onSubmit={submit} className="payment-modal-form">
           <div className="form-grid two">

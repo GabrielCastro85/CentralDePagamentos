@@ -268,10 +268,11 @@ function registerIpc() {
     'operacoes:reopen': (p) => repositories.reopenOperacao(p.id),
 
     // Pagamentos
-    'pagamentos:list':   (p) => repositories.listPagamentos(p.operacaoId),
-    'pagamentos:save':   (p) => repositories.savePagamento(p),
-    'pagamentos:flags':  (p) => repositories.updatePagamentoFlags(p),
-    'pagamentos:delete': (p) => repositories.deletePagamento(p.id),
+    'pagamentos:list':        (p) => repositories.listPagamentos(p.operacaoId),
+    'pagamentos:frequentes':  (p) => repositories.listFavorecidosFrequentes(p.clienteId),
+    'pagamentos:save':        (p) => repositories.savePagamento(p),
+    'pagamentos:flags':       (p) => repositories.updatePagamentoFlags(p),
+    'pagamentos:delete':      (p) => repositories.deletePagamento(p.id),
 
     // Dashboards
     'dashboard:operacional': () => repositories.getOperationalDashboard(),

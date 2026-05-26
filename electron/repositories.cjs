@@ -509,6 +509,42 @@ function createRepositories(db) {
     };
   }
 
+  function listFavorecidosFrequentes(clienteId) {
+    if (!clienteId) return [];
+    return db.prepare(`
+      SELECT
+        p.favorecido,
+        p.documento,
+        p.tipoPagamento,
+        p.chavePix,
+        p.banco,
+        p.agencia,
+        p.tipoConta,
+        p.conta,
+        p.digito,
+        COUNT(*) AS frequencia,
+        MAX(p.data) AS ultimaData
+      FROM pagamentos p
+      JOIN operacoes o ON p.operacaoId = o.id
+      WHERE o.clienteId = ?
+        AND p.deletedAt IS NULL
+        AND o.deletedAt IS NULL
+        AND p.favorecido IS NOT NULL AND p.favorecido != ''
+      GROUP BY
+        p.favorecido,
+        p.documento,
+        p.tipoPagamento,
+        p.chavePix,
+        p.banco,
+        p.agencia,
+        p.tipoConta,
+        p.conta,
+        p.digito
+      ORDER BY frequencia DESC, ultimaData DESC
+      LIMIT 8
+    `).all(Number(clienteId));
+  }
+
   function listPagamentos(operacaoId) {
     const rows = db.prepare('SELECT * FROM pagamentos WHERE operacaoId = ? AND deletedAt IS NULL ORDER BY data DESC, id DESC').all(operacaoId);
     const duplicateKeys = getDuplicateKeys(operacaoId);
@@ -1471,6 +1507,7 @@ function createRepositories(db) {
     listContas,
     listClientes,
     listEmpresas,
+    listFavorecidosFrequentes,
     listOperacoes,
     listPagamentos,
     listAuditLogs,
