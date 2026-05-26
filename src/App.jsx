@@ -240,6 +240,7 @@ function App() {
     loadAll()
     loadLastBackup()
     loadSyncStatus()
+    loadContas()
     api.invoke('config:get').then(setConfigState).catch(() => {})
     api.invoke('app:version').then(setAppVersion).catch(() => {})
     const timer = setInterval(loadSyncStatus, 30_000)
@@ -393,7 +394,17 @@ function App() {
         {error && <Toast type="danger" text={error} onClose={() => setError('')} />}
         {loading && <div className="loading">Carregando dados...</div>}
 
-        {activeTab === 'operacional' && <OperationalDashboard data={state.operacional} onOpen={setSelectedOperationId} goOperations={() => setActiveTab('operacoes')} goHistorico={() => setActiveTab('historico')} />}
+        {activeTab === 'operacional' && (
+          <OperationalDashboard
+            data={state.operacional}
+            onOpen={setSelectedOperationId}
+            goOperations={() => setActiveTab('operacoes')}
+            goHistorico={() => setActiveTab('historico')}
+            contasHoje={contas.filter((c) => !c.pago && c.vencimento === today)}
+            contasVencidas={contas.filter((c) => !c.pago && c.vencimento && c.vencimento < today)}
+            goContas={() => setActiveTab('contas')}
+          />
+        )}
         {activeTab === 'historico' && (
           <HistoricalDashboard
             data={state.historico}
@@ -451,7 +462,7 @@ function App() {
   )
 }
 
-function OperationalDashboard({ data, onOpen, goOperations, goHistorico }) {
+function OperationalDashboard({ data, onOpen, goOperations, goHistorico, contasHoje = [], contasVencidas = [], goContas }) {
   const cards = data?.cards || {}
   const operacoes = data?.operacoes || []
   const [search, setSearch] = useState('')
@@ -463,6 +474,9 @@ function OperationalDashboard({ data, onOpen, goOperations, goHistorico }) {
       )
     : operacoes
 
+  const totalContasHoje = contasHoje.reduce((s, c) => s + Number(c.valor || 0), 0)
+  const totalContasVencidas = contasVencidas.reduce((s, c) => s + Number(c.valor || 0), 0)
+
   return (
     <section className="stack">
       <div className="card-grid six">
@@ -473,6 +487,55 @@ function OperationalDashboard({ data, onOpen, goOperations, goHistorico }) {
         <Metric icon={Hourglass} tone="yellow" title="Pagamentos pendentes" value={cards.pagamentosPendentes || 0} subtext="Aguardando execução" />
         <Metric icon={Paperclip} tone="purple" title="Comprovantes pendentes" value={cards.comprovantesPendentes || 0} subtext="Aguardando envio" />
       </div>
+
+      {(contasVencidas.length > 0 || contasHoje.length > 0) && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {contasVencidas.length > 0 && (
+            <div className="panel" style={{ borderColor: 'rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.06)', padding: '14px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <AlertTriangle size={20} style={{ color: '#f87171', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: '#fecaca', display: 'block', fontSize: 14 }}>
+                      {contasVencidas.length === 1 ? '1 conta em atraso' : `${contasVencidas.length} contas em atraso`}
+                      {' '}— {brl(totalContasVencidas)}
+                    </strong>
+                    <span style={{ color: 'var(--muted)', fontSize: 12 }}>
+                      {contasVencidas.map((c) => c.descricao).slice(0, 3).join(' · ')}
+                      {contasVencidas.length > 3 ? ` · +${contasVencidas.length - 3} mais` : ''}
+                    </span>
+                  </div>
+                </div>
+                <button onClick={goContas} style={{ flexShrink: 0 }}>
+                  <Receipt size={16} />Ver contas
+                </button>
+              </div>
+            </div>
+          )}
+          {contasHoje.length > 0 && (
+            <div className="panel" style={{ borderColor: 'rgba(250,204,21,0.42)', background: 'rgba(250,204,21,0.05)', padding: '14px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <Bell size={20} style={{ color: 'var(--yellow)', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: '#fde68a', display: 'block', fontSize: 14 }}>
+                      {contasHoje.length === 1 ? '1 conta vence hoje' : `${contasHoje.length} contas vencem hoje`}
+                      {' '}— {brl(totalContasHoje)}
+                    </strong>
+                    <span style={{ color: 'var(--muted)', fontSize: 12 }}>
+                      {contasHoje.map((c) => c.descricao).slice(0, 3).join(' · ')}
+                      {contasHoje.length > 3 ? ` · +${contasHoje.length - 3} mais` : ''}
+                    </span>
+                  </div>
+                </div>
+                <button onClick={goContas} style={{ flexShrink: 0 }}>
+                  <Receipt size={16} />Ver contas
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <Panel
         title="Operações abertas"
@@ -1364,7 +1427,6 @@ function ContasPage({ contas, onRefresh, runAction, requestConfirm }) {
               className="compact-input"
               value={filterPago}
               onChange={(e) => setFilterPago(e.target.value)}
-              style={{ padding: '0 8px', height: 34, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               <option value="todas">Todas</option>
               <option value="pendentes">Pendentes</option>
