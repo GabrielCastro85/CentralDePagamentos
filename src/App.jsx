@@ -488,6 +488,8 @@ function OperationalDashboard({ data, onOpen, goOperations, goHistorico, contasH
 
   const totalContasHoje = contasHoje.reduce((s, c) => s + Number(c.valor || 0), 0)
   const totalContasVencidas = contasVencidas.reduce((s, c) => s + Number(c.valor || 0), 0)
+  const opAdiantamentos = operacoes.filter((op) => op.saldo < -0.005)
+  const totalAdiantado = opAdiantamentos.reduce((sum, op) => sum + Math.abs(op.saldo), 0)
 
   return (
     <section className="stack">
@@ -500,8 +502,30 @@ function OperationalDashboard({ data, onOpen, goOperations, goHistorico, contasH
         <Metric icon={Paperclip} tone="purple" title="Comprovantes pendentes" value={cards.comprovantesPendentes || 0} subtext="Aguardando envio" />
       </div>
 
-      {(contasVencidas.length > 0 || contasHoje.length > 0) && (
+      {(opAdiantamentos.length > 0 || contasVencidas.length > 0 || contasHoje.length > 0) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {opAdiantamentos.length > 0 && (
+            <div className="panel" style={{ borderColor: 'rgba(249,115,22,0.45)', background: 'rgba(249,115,22,0.06)', padding: '14px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <AlertTriangle size={20} style={{ color: '#fb923c', flexShrink: 0 }} />
+                  <div>
+                    <strong style={{ color: '#fed7aa', display: 'block', fontSize: 14 }}>
+                      {opAdiantamentos.length === 1 ? '1 operação em adiantamento' : `${opAdiantamentos.length} operações em adiantamento`}
+                      {' '}— {brl(totalAdiantado)} adiantados
+                    </strong>
+                    <span style={{ color: 'var(--muted)', fontSize: 12 }}>
+                      {opAdiantamentos.map((op) => `${op.codigo} (${op.clienteNome})`).slice(0, 2).join(' · ')}
+                      {opAdiantamentos.length > 2 ? ` · +${opAdiantamentos.length - 2} mais` : ''}
+                    </span>
+                  </div>
+                </div>
+                <button onClick={goOperations} style={{ flexShrink: 0 }}>
+                  <WalletCards size={16} />Ver operações
+                </button>
+              </div>
+            </div>
+          )}
           {contasVencidas.length > 0 && (
             <div className="panel" style={{ borderColor: 'rgba(239,68,68,0.45)', background: 'rgba(239,68,68,0.06)', padding: '14px 18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
@@ -1010,7 +1034,7 @@ function NovaOperacaoModal({ form, onChange, empresas, clientes, editing, onClos
               options={empresas.filter((e) => e.ativo).map((e) => [e.id, `${e.apelido}${e.cnpj ? ` — ${formatCpfCnpj(e.cnpj)}` : ''}`])}
               required
             />
-            <CurrencyInput label="Valor recebido" value={form.valorRecebido} onChange={(valorRecebido) => onChange({ ...form, valorRecebido })} required />
+            <CurrencyInput label="Valor recebido (0 se ainda não recebeu)" value={form.valorRecebido} onChange={(valorRecebido) => onChange({ ...form, valorRecebido })} />
             {editing && (
               <Select label="Status" value={form.status} onChange={(status) => onChange({ ...form, status })} options={operationStatuses} />
             )}
@@ -1061,14 +1085,23 @@ function OperationDetail({ operacao, pagamentos, recebimentos = [], onBack, onNe
           <InfoTile label="CNPJ" value={formatCpfCnpj(operacao.empresaCnpj)} />
           <InfoTile label="Status" value={statusLabel(operacao.status)} />
         </div>
+        {operacao.alertaSaldoNegativo && (
+          <div className="adiantamento-banner">
+            <AlertTriangle size={20} style={{ color: '#fb923c', flexShrink: 0 }} />
+            <div>
+              <strong>Operação em adiantamento — {brl(Math.abs(operacao.saldo))} adiantados</strong>
+              <span>Foram pagos {brl(operacao.totalPago)} antes de receber o valor total do cliente. Use o botão <em>Adicionar recebimento</em> quando o cliente enviar.</span>
+            </div>
+          </div>
+        )}
         {operacao.clienteDestaque && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 8, background: 'rgba(250,204,21,0.12)', border: '1px solid #eab308', color: '#a16207', fontWeight: 600, fontSize: 13 }}>
             ⭐ Operação do cliente destacado: {operacao.clienteNome}
           </div>
         )}
-        {alerts.length > 0 && (
+        {alerts.filter(a => a !== 'Adiantamento').length > 0 && (
           <div className="detail-alert-strip">
-            {alerts.map((alert) => <Alert key={alert} label={alert} tone="warn" />)}
+            {alerts.filter(a => a !== 'Adiantamento').map((alert) => <Alert key={alert} label={alert} tone="warn" />)}
           </div>
         )}
       </div>
@@ -1496,7 +1529,7 @@ function InfoTile({ label, value, warn = false }) {
 
 function operationAlerts(operacao, pagamentos) {
   const alerts = []
-  if (operacao.alertaSaldoNegativo) alerts.push('Saldo negativo')
+  if (operacao.alertaSaldoNegativo) alerts.push('Adiantamento')
   if (operacao.pagamentosPendentes > 0) alerts.push('Pagamentos pendentes')
   if (operacao.comprovantesPendentes > 0) alerts.push('Comprovantes faltando')
   if (pagamentos.some((pagamento) => pagamento.alertaDuplicidade)) alerts.push('Possível duplicidade')
@@ -2039,9 +2072,12 @@ function OperationsTable({ operacoes, onOpen, goOperations, extraActions }) {
               <td className={`money ${op.saldo < 0 ? 'negative' : 'yellow-text'}`}>{brl(op.saldo)}</td>
               <td><StatusBadge label={statusLabel(op.status)} tone={statusTone(op.status)} /></td>
               <td>
-                {op.alertaSaldoNegativo && <span className="alert-dot danger"></span>}
-                {!op.alertaSaldoNegativo && op.comprovantesPendentes > 0 && <span className="alert-dot warn"></span>}
-                {!op.alertaSaldoNegativo && op.comprovantesPendentes === 0 && <span className="alert-dot ok"></span>}
+                {op.alertaSaldoNegativo
+                  ? <span className="adiantamento-badge"><AlertTriangle size={12} />Adiantamento</span>
+                  : op.comprovantesPendentes > 0
+                    ? <span className="alert-dot warn"></span>
+                    : <span className="alert-dot ok"></span>
+                }
               </td>
               <td className="table-actions">
                 {extraActions?.(op) || (

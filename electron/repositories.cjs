@@ -354,8 +354,8 @@ function createRepositories(db) {
     required(input.data, 'Informe a data da operação.');
     required(input.clienteId, 'Selecione um cliente.');
     required(input.empresaId, 'Selecione uma empresa/conta.');
-    if (normalizeMoney(input.valorRecebido) <= 0) {
-      throw new Error('Informe um valor recebido maior que zero.');
+    if (normalizeMoney(input.valorRecebido) < 0) {
+      throw new Error('O valor recebido não pode ser negativo.');
     }
     if (!OPERATION_STATUSES.includes(input.status)) {
       throw new Error('Status de operação inválido.');

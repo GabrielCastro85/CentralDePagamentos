@@ -1207,6 +1207,51 @@ textarea::placeholder {
   background: var(--red);
 }
 
+/* ── Adiantamento ────────────────────────────────────────────────────────── */
+.adiantamento-badge {
+  align-items: center;
+  background: rgba(249, 115, 22, 0.15);
+  border: 1px solid rgba(249, 115, 22, 0.5);
+  border-radius: 999px;
+  color: #fb923c;
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 4px;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.adiantamento-banner {
+  align-items: flex-start;
+  background: rgba(249, 115, 22, 0.08);
+  border: 1px solid rgba(249, 115, 22, 0.4);
+  border-radius: 8px;
+  display: flex;
+  gap: 12px;
+  padding: 14px 18px;
+}
+
+.adiantamento-banner strong {
+  color: #fed7aa;
+  display: block;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.adiantamento-banner span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.adiantamento-banner em {
+  color: #fb923c;
+  font-style: normal;
+  font-weight: 600;
+}
+
 .table-footer {
   align-items: center;
   color: var(--muted);
