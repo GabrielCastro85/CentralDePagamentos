@@ -436,6 +436,12 @@ function registerIpc() {
     'sync:queue':           () => repositories.listSyncQueue({ limit: 100 }),
     'sync:now':             () => syncService.syncNow(),
     'sync:retry':           () => syncService.retryFailed(),
+    'sync:pushAll':         async () => {
+      const result = repositories.enqueueAllForSync();
+      appendLog(`Sync pushAll: ${result.enqueued} registros enfileirados.`);
+      await syncService.syncNow();
+      return result;
+    },
     'sync:getCredentials':  () => ({
       url: process.env.SUPABASE_URL || '',
       key: process.env.SUPABASE_ANON_KEY || '',

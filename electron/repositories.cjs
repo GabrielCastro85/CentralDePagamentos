@@ -1247,6 +1247,29 @@ function createRepositories(db) {
     return getSyncStatus();
   }
 
+  // Enfileira TODOS os registros locais para envio ao Supabase.
+  // Usado na sincronização completa inicial (dados anteriores à configuração do sync).
+  function enqueueAllForSync() {
+    const tables = [
+      { entity: 'empresas',   sql: 'SELECT * FROM empresas WHERE deletedAt IS NULL' },
+      { entity: 'clientes',   sql: 'SELECT * FROM clientes WHERE deletedAt IS NULL' },
+      { entity: 'operacoes',  sql: 'SELECT * FROM operacoes WHERE deletedAt IS NULL' },
+      { entity: 'pagamentos', sql: 'SELECT * FROM pagamentos WHERE deletedAt IS NULL' },
+      { entity: 'contas',     sql: 'SELECT * FROM contas WHERE deletedAt IS NULL' },
+    ];
+    let total = 0;
+    for (const { entity, sql } of tables) {
+      const rows = db.prepare(sql).all();
+      for (const row of rows) {
+        enqueueSync(entity, row.id, 'UPDATE', row);
+        total += 1;
+      }
+    }
+    // Zera o lastPullAt para que o pull traga tudo do Supabase também
+    setMetadata('lastPullAt', null);
+    return { enqueued: total };
+  }
+
   function getRemotePayload(entity, localRow) {
     return localToRemote(entity, localRow);
   }
@@ -1605,6 +1628,7 @@ function createRepositories(db) {
   return {
     addRecebimento,
     applyRemoteRecord,
+    enqueueAllForSync,
     deleteConta,
     deleteCliente,
     deleteEmpresa,

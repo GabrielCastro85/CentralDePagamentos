@@ -489,6 +489,12 @@ function App() {
               setSyncCreds(creds)
               await syncNow()
             }}
+            onPushAll={async () => {
+              setSyncStatus((s) => ({ ...s, state: 'syncing' }))
+              await api.invoke('sync:pushAll')
+              await loadSyncStatus()
+              await refreshAfterChange()
+            }}
           />
         )}
         {activeTab === 'diagnostico' && <DiagnosticsPage diagnostics={diagnostics} auditLogs={auditLogs} onRefresh={loadDiagnostics} runAction={runAction} />}
@@ -2036,7 +2042,7 @@ function ConfigPage({ config, onSave, updateState, setUpdateState, onDownloadUpd
   )
 }
 
-function SyncPage({ status, queue, onSync, onRefresh, creds, onSaveCreds }) {
+function SyncPage({ status, queue, onSync, onRefresh, creds, onSaveCreds, onPushAll }) {
   const [form, setForm] = useState({ url: creds?.url || '', key: creds?.key || '' })
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -2102,7 +2108,12 @@ function SyncPage({ status, queue, onSync, onRefresh, creds, onSaveCreds }) {
       </Panel>
 
       {/* Status da sincronização */}
-      <Panel title="Status da sincronização" action={<button className="primary" onClick={onSync} disabled={status.state === 'syncing'}><RefreshCw size={16} />Sincronizar agora</button>}>
+      <Panel title="Status da sincronização" action={
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="ghost" onClick={onPushAll} disabled={status.state === 'syncing'} title="Envia todos os dados locais para o Supabase — use uma vez para sincronizar dados antigos"><Upload size={16} />Enviar tudo</button>
+          <button className="primary" onClick={onSync} disabled={status.state === 'syncing'}><RefreshCw size={16} />Sincronizar agora</button>
+        </div>
+      }>
         <div className="sync-overview">
           <InfoTile label="Estado" value={syncLabel(status)} />
           <InfoTile label="Pendências" value={status.pending || 0} />
