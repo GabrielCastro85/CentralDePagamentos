@@ -432,10 +432,23 @@ function registerIpc() {
     },
 
     // Sincronização
-    'sync:status': () => syncService.getStatus(),
-    'sync:queue':  () => repositories.listSyncQueue({ limit: 100 }),
-    'sync:now':    () => syncService.syncNow(),
-    'sync:retry':  () => syncService.retryFailed(),
+    'sync:status':          () => syncService.getStatus(),
+    'sync:queue':           () => repositories.listSyncQueue({ limit: 100 }),
+    'sync:now':             () => syncService.syncNow(),
+    'sync:retry':           () => syncService.retryFailed(),
+    'sync:getCredentials':  () => ({
+      url: process.env.SUPABASE_URL || '',
+      key: process.env.SUPABASE_ANON_KEY || '',
+    }),
+    'sync:saveCredentials': (p) => {
+      const envPath = path.join(app.getPath('userData'), '.env');
+      const content = `SUPABASE_URL=${p.url || ''}\nSUPABASE_ANON_KEY=${p.key || ''}\n`;
+      fs.writeFileSync(envPath, content, 'utf8');
+      process.env.SUPABASE_URL = p.url || '';
+      process.env.SUPABASE_ANON_KEY = p.key || '';
+      appendLog('Credenciais Supabase atualizadas.');
+      return { ok: true };
+    },
 
     // Contas a Pagar
     'contas:list':   (p) => repositories.listContas(p),
@@ -539,7 +552,7 @@ app.whenReady().then(() => {
 
     syncTimer = setInterval(() => {
       syncService.syncNow().catch((err) => appendLog('Sync timer error:', err));
-    }, 3 * 60 * 1000);
+    }, 30 * 1000);
 
   } catch (err) {
     appendLog('Startup error:', err);

@@ -283,6 +283,14 @@ function runMigrations(db) {
       db.prepare('INSERT INTO migrations (id, name, appliedAt) VALUES (?, ?, ?)').run(7, '007_recebimentos', nowIso());
     })();
   }
+
+  if (!applied.includes('008_contas_sync')) {
+    db.transaction(() => {
+      db.exec(`ALTER TABLE contas ADD COLUMN syncStatus TEXT DEFAULT 'PENDING'`);
+      db.exec(`ALTER TABLE contas ADD COLUMN lastSyncedAt TEXT`);
+      db.prepare('INSERT INTO migrations (id, name, appliedAt) VALUES (?, ?, ?)').run(8, '008_contas_sync', nowIso());
+    })();
+  }
 }
 
 function tableColumns(db, table) {

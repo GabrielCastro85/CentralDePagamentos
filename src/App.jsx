@@ -19,6 +19,7 @@ import {
   DatabaseBackup,
   Download,
   Eye,
+  EyeOff,
   FileDown,
   HelpCircle,
   History,
@@ -150,6 +151,7 @@ function App() {
   const [lastBackup, setLastBackup] = useState(null)
   const [syncStatus, setSyncStatus] = useState({ state: 'idle', pending: 0, errors: 0, configured: false })
   const [syncQueue, setSyncQueue] = useState([])
+  const [syncCreds, setSyncCreds] = useState({ url: '', key: '' })
   const [diagnostics, setDiagnostics] = useState(null)
   const [auditLogs, setAuditLogs] = useState([])
   const [helpOpen, setHelpOpen] = useState(false)
@@ -264,6 +266,7 @@ function App() {
     loadContas()
     api.invoke('config:get').then(setConfigState).catch(() => {})
     api.invoke('app:version').then(setAppVersion).catch(() => {})
+    api.invoke('sync:getCredentials').then(setSyncCreds).catch(() => {})
     const timer = setInterval(loadSyncStatus, 30_000)
     // Escuta eventos push do auto-updater (electron-updater)
     const cleanupUpdater = window.centralApi?.onUpdaterEvent?.((event) => {
@@ -474,7 +477,20 @@ function App() {
           />
         )}
         {activeTab === 'backup' && <BackupPage runAction={runAction} requestConfirm={requestConfirm} />}
-        {activeTab === 'sincronizacao' && <SyncPage status={syncStatus} queue={syncQueue} onSync={syncNow} onRefresh={loadSyncStatus} />}
+        {activeTab === 'sincronizacao' && (
+          <SyncPage
+            status={syncStatus}
+            queue={syncQueue}
+            onSync={syncNow}
+            onRefresh={loadSyncStatus}
+            creds={syncCreds}
+            onSaveCreds={async (creds) => {
+              await api.invoke('sync:saveCredentials', creds)
+              setSyncCreds(creds)
+              await syncNow()
+            }}
+          />
+        )}
         {activeTab === 'diagnostico' && <DiagnosticsPage diagnostics={diagnostics} auditLogs={auditLogs} onRefresh={loadDiagnostics} runAction={runAction} />}
         {activeTab === 'configuracoes' && (
           <ConfigPage
@@ -2020,10 +2036,73 @@ function ConfigPage({ config, onSave, updateState, setUpdateState, onDownloadUpd
   )
 }
 
-function SyncPage({ status, queue, onSync, onRefresh }) {
+function SyncPage({ status, queue, onSync, onRefresh, creds, onSaveCreds }) {
+  const [form, setForm] = useState({ url: creds?.url || '', key: creds?.key || '' })
+  const [showKey, setShowKey] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
+
+  useEffect(() => {
+    setForm({ url: creds?.url || '', key: creds?.key || '' })
+  }, [creds])
+
+  async function handleSaveCreds(e) {
+    e.preventDefault()
+    if (!form.url || !form.key) { setSaveMsg('Preencha a URL e a chave antes de salvar.'); return }
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      await onSaveCreds(form)
+      setSaveMsg('✓ Credenciais salvas. Sincronizando...')
+    } catch (err) {
+      setSaveMsg('Erro ao salvar: ' + err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
     <section className="stack">
-      <Panel title="Sincronização online/offline" action={<button className="primary" onClick={onSync} disabled={status.state === 'syncing'}><RefreshCw size={16} />Sincronizar agora</button>}>
+      {/* Painel de credenciais */}
+      <Panel title="Configuração do Supabase">
+        <div className="sync-creds-info">
+          <p>Para sincronizar entre dois PCs, crie um projeto gratuito em <strong>supabase.com</strong>, crie as tabelas com o SQL fornecido abaixo e cole as credenciais aqui em <strong>ambos os computadores</strong>.</p>
+        </div>
+        <form className="sync-creds-form" onSubmit={handleSaveCreds}>
+          <label>
+            <span>Project URL</span>
+            <input
+              type="url"
+              placeholder="https://xxxxxxxxxxxx.supabase.co"
+              value={form.url}
+              onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
+            />
+          </label>
+          <label>
+            <span>Anon / Public Key</span>
+            <div className="sync-key-wrap">
+              <input
+                type={showKey ? 'text' : 'password'}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                value={form.key}
+                onChange={(e) => setForm((f) => ({ ...f, key: e.target.value }))}
+              />
+              <button type="button" className="ghost" onClick={() => setShowKey((v) => !v)}>
+                {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
+              </button>
+            </div>
+          </label>
+          <div className="sync-creds-actions">
+            <button className="primary" type="submit" disabled={saving}>
+              <Check size={15} />{saving ? 'Salvando...' : 'Salvar e conectar'}
+            </button>
+            {saveMsg && <span className={`sync-save-msg ${saveMsg.startsWith('✓') ? 'ok' : 'err'}`}>{saveMsg}</span>}
+          </div>
+        </form>
+      </Panel>
+
+      {/* Status da sincronização */}
+      <Panel title="Status da sincronização" action={<button className="primary" onClick={onSync} disabled={status.state === 'syncing'}><RefreshCw size={16} />Sincronizar agora</button>}>
         <div className="sync-overview">
           <InfoTile label="Estado" value={syncLabel(status)} />
           <InfoTile label="Pendências" value={status.pending || 0} />
@@ -2035,7 +2114,13 @@ function SyncPage({ status, queue, onSync, onRefresh }) {
         {!status.configured && (
           <div className="update-result not_configured">
             <strong>Supabase ainda não configurado.</strong>
-            <span>O app continua funcionando offline. Configure `SUPABASE_URL` e `SUPABASE_ANON_KEY` para ativar a sincronização online.</span>
+            <span>Configure as credenciais acima para ativar a sincronização. O app continua funcionando offline normalmente.</span>
+          </div>
+        )}
+        {status.configured && status.state === 'online' && (
+          <div className="update-result downloaded">
+            <strong>Sincronização ativa</strong>
+            <span>O app sincroniza automaticamente a cada 30 segundos.</span>
           </div>
         )}
         {status.lastError && (
@@ -2046,6 +2131,7 @@ function SyncPage({ status, queue, onSync, onRefresh }) {
         )}
       </Panel>
 
+      {/* Fila de sincronização */}
       <Panel title="Fila local de sincronização" action={<button className="ghost" onClick={onRefresh}><RefreshCw size={16} />Atualizar</button>}>
         <div className="table-wrap">
           <table>

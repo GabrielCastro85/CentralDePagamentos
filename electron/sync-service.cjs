@@ -2,12 +2,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { nowIso } = require('./database.cjs');
 
-const ENTITY_ORDER = ['empresas', 'clientes', 'operacoes', 'pagamentos', 'audit_logs'];
+const ENTITY_ORDER = ['empresas', 'clientes', 'operacoes', 'pagamentos', 'contas', 'audit_logs'];
 const TABLES = {
   empresas: 'empresas',
   clientes: 'clientes',
   operacoes: 'operacoes',
   pagamentos: 'pagamentos',
+  contas: 'contas',
   audit_logs: 'audit_logs',
 };
 

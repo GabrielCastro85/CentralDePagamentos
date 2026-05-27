@@ -2077,6 +2077,83 @@ button.icon-only {
   padding: 7px;
 }
 
+/* ── Sync credentials form ─────────────────────────────────── */
+.sync-creds-info {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 18px;
+}
+
+.sync-creds-info strong {
+  color: var(--text);
+}
+
+.sync-creds-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sync-creds-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sync-creds-form label > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.sync-creds-form input {
+  background: var(--panel-deep);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  flex: 1;
+  font-size: 13px;
+  padding: 9px 12px;
+}
+
+.sync-creds-form input:focus {
+  border-color: var(--teal);
+  outline: none;
+}
+
+.sync-key-wrap {
+  display: flex;
+  gap: 6px;
+}
+
+.sync-key-wrap input {
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.sync-creds-actions {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.sync-save-msg {
+  font-size: 13px;
+}
+
+.sync-save-msg.ok {
+  color: var(--teal);
+}
+
+.sync-save-msg.err {
+  color: var(--red);
+}
+
 /* ── Update banner ─────────────────────────────────────────── */
 .update-banner {
   align-items: center;

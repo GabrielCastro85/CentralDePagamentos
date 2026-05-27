@@ -115,6 +115,7 @@ function createRepositories(db) {
     clientes: 'clientes',
     operacoes: 'operacoes',
     pagamentos: 'pagamentos',
+    contas: 'contas',
     audit_logs: 'audit_logs',
   };
 
@@ -785,26 +786,41 @@ function createRepositories(db) {
     if (input.id) {
       db.prepare(`
         UPDATE contas SET descricao=@descricao, valor=@valor, vencimento=@vencimento,
-          categoria=@categoria, observacao=@observacao, updatedAt=@updatedAt
+          categoria=@categoria, observacao=@observacao, updatedAt=@updatedAt, syncStatus='PENDING'
         WHERE id=@id
       `).run({ descricao: input.descricao, valor: Number(input.valor) || 0, vencimento: input.vencimento || null, categoria: input.categoria || '', observacao: input.observacao || '', updatedAt: now, id: input.id });
-      return db.prepare('SELECT * FROM contas WHERE id = ?').get(input.id);
+      const saved = db.prepare('SELECT * FROM contas WHERE id = ?').get(input.id);
+      enqueueSync('contas', input.id, 'UPDATE', saved);
+      return saved;
     }
     const result = db.prepare(`
-      INSERT INTO contas (uuid, descricao, valor, vencimento, pago, pagoEm, comprovantePath, categoria, observacao, createdAt, updatedAt, deviceId)
-      VALUES (@uuid, @descricao, @valor, @vencimento, 0, NULL, NULL, @categoria, @observacao, @createdAt, @updatedAt, @deviceId)
+      INSERT INTO contas (uuid, descricao, valor, vencimento, pago, pagoEm, comprovantePath, categoria, observacao, createdAt, updatedAt, deviceId, syncStatus)
+      VALUES (@uuid, @descricao, @valor, @vencimento, 0, NULL, NULL, @categoria, @observacao, @createdAt, @updatedAt, @deviceId, 'PENDING')
     `).run({ uuid: randomUUID(), descricao: input.descricao || '', valor: Number(input.valor) || 0, vencimento: input.vencimento || null, categoria: input.categoria || '', observacao: input.observacao || '', createdAt: now, updatedAt: now, deviceId });
-    return db.prepare('SELECT * FROM contas WHERE id = ?').get(result.lastInsertRowid);
+    const saved = db.prepare('SELECT * FROM contas WHERE id = ?').get(result.lastInsertRowid);
+    enqueueSync('contas', result.lastInsertRowid, 'CREATE', saved);
+    return saved;
   }
 
   function deleteConta(id) {
     const now = nowIso();
-    return db.prepare('UPDATE contas SET deletedAt=?, updatedAt=? WHERE id=?').run(now, now, id).changes;
+    const before = db.prepare('SELECT * FROM contas WHERE id = ?').get(id);
+    const changes = db.prepare("UPDATE contas SET deletedAt=?, updatedAt=?, syncStatus='PENDING' WHERE id=?").run(now, now, id).changes;
+    if (changes > 0 && before) {
+      const updated = db.prepare('SELECT * FROM contas WHERE id = ?').get(id);
+      enqueueSync('contas', id, 'DELETE', updated);
+    }
+    return changes;
   }
 
   function pagarConta(id, pago) {
     const now = nowIso();
-    return db.prepare('UPDATE contas SET pago=?, pagoEm=?, updatedAt=? WHERE id=?').run(pago ? 1 : 0, pago ? now : null, now, id).changes;
+    const changes = db.prepare("UPDATE contas SET pago=?, pagoEm=?, updatedAt=?, syncStatus='PENDING' WHERE id=?").run(pago ? 1 : 0, pago ? now : null, now, id).changes;
+    if (changes > 0) {
+      const saved = db.prepare('SELECT * FROM contas WHERE id = ?').get(id);
+      enqueueSync('contas', id, 'UPDATE', saved);
+    }
+    return changes;
   }
 
   function salvarComprovanteConta(id, comprovantePath) {
@@ -1251,6 +1267,7 @@ function createRepositories(db) {
       if (entity === 'clientes') return upsertRemoteCliente(localPayload, current);
       if (entity === 'operacoes') return upsertRemoteOperacao(localPayload, current);
       if (entity === 'pagamentos') return upsertRemotePagamento(localPayload, current);
+      if (entity === 'contas') return upsertRemoteConta(localPayload, current);
       if (entity === 'audit_logs') return upsertRemoteAuditLog(localPayload, current);
       return null;
     } finally {
@@ -1380,6 +1397,30 @@ function createRepositories(db) {
     return { applied: true, id: result.lastInsertRowid };
   }
 
+  function upsertRemoteConta(row, current) {
+    const payload = { ...row, syncStatus: 'SYNCED', lastSyncedAt: nowIso() };
+    if (current) {
+      const sql = `
+        UPDATE contas SET descricao=@descricao, valor=@valor, vencimento=@vencimento,
+          pago=@pago, pagoEm=@pagoEm, comprovantePath=@comprovantePath,
+          categoria=@categoria, observacao=@observacao, createdAt=@createdAt,
+          updatedAt=@updatedAt, deletedAt=@deletedAt, syncStatus=@syncStatus,
+          lastSyncedAt=@lastSyncedAt, deviceId=@deviceId
+        WHERE id=@id
+      `;
+      db.prepare(sql).run(sqlParams(sql, { ...payload, id: current.id }));
+      return { applied: true, id: current.id };
+    }
+    const sql = `
+      INSERT INTO contas (uuid, descricao, valor, vencimento, pago, pagoEm, comprovantePath,
+        categoria, observacao, createdAt, updatedAt, deletedAt, syncStatus, lastSyncedAt, deviceId)
+      VALUES (@uuid, @descricao, @valor, @vencimento, @pago, @pagoEm, @comprovantePath,
+        @categoria, @observacao, @createdAt, @updatedAt, @deletedAt, @syncStatus, @lastSyncedAt, @deviceId)
+    `;
+    const result = db.prepare(sql).run(sqlParams(sql, payload));
+    return { applied: true, id: result.lastInsertRowid };
+  }
+
   function remoteToLocal(entity, record) {
     const base = {
       uuid: record.id,
@@ -1439,6 +1480,19 @@ function createRepositories(db) {
         valor: normalizeMoney(record.valor),
         pago: boolToInt(record.pago),
         comprovanteEnviado: boolToInt(record.comprovante_enviado),
+        observacao: record.observacao || '',
+      };
+    }
+    if (entity === 'contas') {
+      return {
+        ...base,
+        descricao: record.descricao || '',
+        valor: record.valor || 0,
+        vencimento: record.vencimento || null,
+        pago: boolToInt(record.pago),
+        pagoEm: record.pago_em || null,
+        comprovantePath: record.comprovante_path || null,
+        categoria: record.categoria || '',
         observacao: record.observacao || '',
       };
     }
@@ -1513,6 +1567,19 @@ function createRepositories(db) {
         valor: normalizeMoney(row.valor),
         pago: Boolean(row.pago),
         comprovante_enviado: Boolean(row.comprovanteEnviado),
+        observacao: row.observacao || '',
+      };
+    }
+    if (entity === 'contas') {
+      return {
+        ...base,
+        descricao: row.descricao || '',
+        valor: row.valor || 0,
+        vencimento: row.vencimento || null,
+        pago: Boolean(row.pago),
+        pago_em: row.pagoEm || null,
+        comprovante_path: row.comprovantePath || null,
+        categoria: row.categoria || '',
         observacao: row.observacao || '',
       };
     }
