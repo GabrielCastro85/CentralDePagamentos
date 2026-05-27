@@ -528,6 +528,15 @@ app.whenReady().then(() => {
     checkContasVencendo();
     syncService.syncNow().catch((err) => appendLog('Sync startup error:', err));
 
+    // Verificar atualizações automaticamente 6s após o app iniciar
+    // (delay garante que a UI esteja montada antes de receber o evento)
+    if (app.isPackaged && autoUpdater) {
+      setTimeout(() => {
+        appendLog('Auto-update: verificando na inicialização...');
+        autoUpdater.checkForUpdates().catch((err) => appendLog('Auto-update startup error:', err));
+      }, 6000);
+    }
+
     syncTimer = setInterval(() => {
       syncService.syncNow().catch((err) => appendLog('Sync timer error:', err));
     }, 3 * 60 * 1000);

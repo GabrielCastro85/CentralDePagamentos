@@ -155,6 +155,7 @@ function App() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [appVersion, setAppVersion] = useState('...')
   const [updateState, setUpdateState] = useState(null)
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false)
   const [contas, setContas] = useState([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [novaOpModalTrigger, setNovaOpModalTrigger] = useState(0)
@@ -246,6 +247,16 @@ function App() {
     await loadSyncStatus()
   }
 
+  async function downloadUpdate() {
+    setUpdateBannerDismissed(false)
+    setUpdateState((prev) => ({ ...prev, status: 'downloading', percent: 0 }))
+    await api.invoke('updates:download')
+  }
+
+  async function installUpdate() {
+    await api.invoke('updates:install')
+  }
+
   useEffect(() => {
     loadAll()
     loadLastBackup()
@@ -255,7 +266,13 @@ function App() {
     api.invoke('app:version').then(setAppVersion).catch(() => {})
     const timer = setInterval(loadSyncStatus, 30_000)
     // Escuta eventos push do auto-updater (electron-updater)
-    const cleanupUpdater = window.centralApi?.onUpdaterEvent?.((event) => setUpdateState(event))
+    const cleanupUpdater = window.centralApi?.onUpdaterEvent?.((event) => {
+      setUpdateState(event)
+      // Quando o download termina, sempre reexibe o banner mesmo que estivesse fechado
+      if (event.status === 'downloaded' || event.status === 'available') {
+        setUpdateBannerDismissed(false)
+      }
+    })
     return () => {
       clearInterval(timer)
       cleanupUpdater?.()
@@ -405,6 +422,15 @@ function App() {
         {error && <Toast type="danger" text={error} onClose={() => setError('')} />}
         {loading && <div className="loading">Carregando dados...</div>}
 
+        {!updateBannerDismissed && ['available', 'downloading', 'downloaded'].includes(updateState?.status) && (
+          <UpdateBanner
+            updateState={updateState}
+            onDownload={downloadUpdate}
+            onInstall={installUpdate}
+            onDismiss={() => setUpdateBannerDismissed(true)}
+          />
+        )}
+
         {activeTab === 'operacional' && (
           <OperationalDashboard
             data={state.operacional}
@@ -458,6 +484,8 @@ function App() {
             }}
             updateState={updateState}
             setUpdateState={setUpdateState}
+            onDownloadUpdate={downloadUpdate}
+            onInstallUpdate={installUpdate}
           />
         )}
 
@@ -470,6 +498,59 @@ function App() {
 
       {modal && <ConfirmModal modal={modal} onClose={() => setModal(null)} />}
       {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
+    </div>
+  )
+}
+
+function UpdateBanner({ updateState, onDownload, onInstall, onDismiss }) {
+  const isDownloading = updateState?.status === 'downloading'
+  const isDownloaded  = updateState?.status === 'downloaded'
+  const isAvailable   = updateState?.status === 'available'
+
+  return (
+    <div className="update-banner">
+      <div className="update-banner-icon">
+        {isDownloaded ? <Check size={20} /> : <Download size={20} />}
+      </div>
+      <div className="update-banner-content">
+        {isAvailable && (
+          <>
+            <strong>Nova versão disponível: v{updateState.version}</strong>
+            <span>Uma atualização foi encontrada. Baixe agora para manter o app sempre atualizado.</span>
+          </>
+        )}
+        {isDownloading && (
+          <>
+            <strong>Baixando v{updateState.version}… {updateState.percent ?? 0}%</strong>
+            <div className="update-banner-progress">
+              <div style={{ width: `${updateState.percent ?? 0}%` }} />
+            </div>
+          </>
+        )}
+        {isDownloaded && (
+          <>
+            <strong>v{updateState.version} pronto para instalar</strong>
+            <span>O download foi concluído. Reinicie o app para aplicar a atualização.</span>
+          </>
+        )}
+      </div>
+      <div className="update-banner-actions">
+        {isAvailable && (
+          <button className="primary" onClick={onDownload}>
+            <Download size={15} />Baixar agora
+          </button>
+        )}
+        {isDownloaded && (
+          <button className="success" onClick={onInstall}>
+            <Check size={15} />Reiniciar e instalar
+          </button>
+        )}
+        {(isAvailable) && (
+          <button className="ghost" onClick={onDismiss} title="Fechar aviso">
+            Agora não
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -1835,7 +1916,7 @@ function BackupPage({ runAction, requestConfirm }) {
   )
 }
 
-function ConfigPage({ config, onSave, updateState, setUpdateState }) {
+function ConfigPage({ config, onSave, updateState, setUpdateState, onDownloadUpdate, onInstallUpdate }) {
   const [form, setForm] = useState({ ...config })
 
   useEffect(() => { setForm({ ...config }) }, [config])
@@ -1858,14 +1939,8 @@ function ConfigPage({ config, onSave, updateState, setUpdateState }) {
     }
   }
 
-  async function downloadUpdate() {
-    setUpdateState((prev) => ({ ...prev, status: 'downloading', percent: 0 }))
-    await api.invoke('updates:download')
-  }
-
-  async function installUpdate() {
-    await api.invoke('updates:install')
-  }
+  const downloadUpdate = onDownloadUpdate
+  const installUpdate  = onInstallUpdate
 
   const isChecking    = updateState?.status === 'checking'
   const isDownloading = updateState?.status === 'downloading'
