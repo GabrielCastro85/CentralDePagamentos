@@ -498,11 +498,13 @@ h2 {
 
 .metric strong {
   color: var(--text);
-  font-size: clamp(18px, 1.35vw, 22px);
+  font-size: clamp(16px, 1.15vw, 20px);
   font-weight: 900;
   line-height: 1.15;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .metric small {
@@ -1713,6 +1715,13 @@ textarea::placeholder {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #3a4c68;
+}
+
+/* Monitores até 1920p (Full HD): 6 colunas ficam muito estreitas com sidebar aberta */
+@media (max-width: 1950px) {
+  .card-grid.six {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 1500px) {
