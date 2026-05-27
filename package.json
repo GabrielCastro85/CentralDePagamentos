@@ -1,7 +1,7 @@
 {
   "name": "central-de-pagamentos",
   "private": true,
-  "version": "1.0.23",
+  "version": "1.0.24",
   "description": "App desktop Windows para controle operacional de pagamentos.",
   "author": "Central de Pagamentos",
   "main": "electron/main.cjs",

@@ -42,7 +42,7 @@ import {
   Users,
   WalletCards,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const api = {
@@ -861,11 +861,15 @@ function OperacoesPage({ empresas, clientes, operacoes, selectedOperation, selec
   const [recebimentoModal, setRecebimentoModal] = useState(false)
   const editing = Boolean(form.id)
 
+  // Ref inicializado com o valor atual para que remontagens do componente
+  // (trocar de aba e voltar) não reabram o modal acidentalmente.
+  const prevTriggerRef = useRef(novaOpModalTrigger)
   useEffect(() => {
-    if (novaOpModalTrigger > 0) {
+    if (novaOpModalTrigger > 0 && novaOpModalTrigger !== prevTriggerRef.current) {
       setForm(emptyOperacao)
       setNewOpModal(true)
     }
+    prevTriggerRef.current = novaOpModalTrigger
   }, [novaOpModalTrigger])
 
   async function submitOperation(event) {
